@@ -214,6 +214,44 @@ app.get('/battle-results-pretty', async (c) => {
     }
 });
 
+// 6. Get win/loss statistics
+app.get('/api/stats/win-loss', async (c) => {
+    try {
+        const query = `
+            SELECT
+                client_name,
+                COUNT(*) AS total_games_played,
+                SUM(CASE WHEN winner_name = client_name THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN winner_name != client_name THEN 1 ELSE 0 END) AS losses,
+                SUM(CASE WHEN winner_name IS NULL THEN 1 ELSE 0 END) AS draws,
+                AVG(CASE WHEN winner_name != client_name THEN total_moves ELSE NULL END) AS avg_moves_to_loss
+            FROM (
+                SELECT client1_name AS client_name, winner_name, total_moves FROM battle_results
+                UNION ALL
+                SELECT client2_name AS client_name, winner_name, total_moves FROM battle_results
+            ) AS combined_results
+            GROUP BY client_name
+            ORDER BY wins DESC;
+        `;
+        const [rows] = await pool.query(query);
+
+        const stats = (rows as any[]).map(row => ({
+            clientName: row.client_name,
+            totalGamesPlayed: row.total_games_played,
+            wins: row.wins,
+            losses: row.losses,
+            draws: row.draws,
+            winRate: row.total_games_played > 0 ? (row.wins / row.total_games_played) * 100 : 0,
+            avgMovesToLoss: row.avg_moves_to_loss
+        }));
+
+        return c.json(stats);
+    } catch (error: any) {
+        console.error("Failed to fetch win/loss statistics:", error);
+        return c.json({ error: 'Failed to fetch win/loss statistics' }, 500);
+    }
+});
+
 // --- WebSocket (for potential real-time updates) ---
 /*
 app.get('/ws/:gameId', upgradeWebSocket((c: Context) => {
