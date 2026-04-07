@@ -24,6 +24,10 @@ const pool = mysql.createPool({
 interface GameState {
   shogi: Shogi;
   moves: string[];
+  client1Name: string; // Name of the first AI client (black)
+  client2Name: string; // Name of the second AI client (white)
+  startTime: Date;
+  endTime?: Date; // Optional, set when game ends
 }
 const games = new Map<string, GameState>();
 
@@ -58,11 +62,18 @@ const getGame = (gameId: string) => {
 // --- Endpoints ---
 
 // 1. Start a new game
-app.post('/games', (c) => {
+const startGameSchema = z.object({
+  client1Name: z.string(),
+  client2Name: z.string(),
+});
+
+app.post('/games', zValidator('json', startGameSchema), (c) => {
+  const { client1Name, client2Name } = c.req.valid('json');
   const gameId = crypto.randomUUID();
   const shogi = new Shogi();
-  games.set(gameId, { shogi, moves: [] });
-  console.log(`Game started: ${gameId}`);
+  const startTime = new Date();
+  games.set(gameId, { shogi, moves: [], client1Name, client2Name, startTime });
+  console.log(`Game started: ${gameId} (${client1Name} vs ${client2Name})`);
   return c.json({ gameId });
 });
 
@@ -106,18 +117,31 @@ app.post('/games/:id/move', zValidator('json', moveSchema), async (c) => {
     const legalMoves = getAllLegalMoves(shogi);
     if (legalMoves.length === 0) {
       const winner = player === Color.Black ? 'b' : 'w';
+      const winnerName = winner === 'b' ? gameState.client1Name : gameState.client2Name;
       const gameRecord = {
         moves: moves,
         winner: winner,
         finalSfen: shogi.toSFENString(),
       };
 
+      // Update endTime in GameState
+      gameState.endTime = new Date();
+      const gameDurationMs = gameState.endTime.getTime() - gameState.startTime.getTime();
+      const gameRecordCsa = moves.join('\n');
+
+      // Insert into 'games' table (existing functionality)
       await pool.execute(
         'INSERT INTO games (id, winner, moves, ai_type, game_record) VALUES (?, ?, ?, ?, ?)',
         [id, winner, moves.length, 'unknown', JSON.stringify(gameRecord)]
       );
+
+      // Insert into 'battle_results' table (new functionality)
+      await pool.execute(
+        'INSERT INTO battle_results (id, client1_name, client2_name, winner_name, total_moves, game_duration_ms, start_time, end_time, game_record_csa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, gameState.client1Name, gameState.client2Name, winnerName, moves.length, gameDurationMs, gameState.startTime, gameState.endTime, gameRecordCsa]
+      );
       
-      console.log(`Game over: ${id}. Winner: ${winner}. Saved to DB.`);
+      console.log(`Game over: ${id}. Winner: ${winnerName}. Saved to DB.`);
       games.delete(id); // Clean up from memory
       return c.json({ status: 'game_over', winner, gameId: id });
     }
@@ -144,6 +168,49 @@ app.get('/games/:id/stats', async (c) => {
         return c.json((rows as any)[0]);
     } catch (error: any) {
         return c.json({ error: 'Failed to fetch game stats' }, 500);
+    }
+});
+
+// 4. Get all battle results
+app.get('/battle-results', async (c) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM battle_results ORDER BY start_time DESC');
+        return c.json(rows);
+    } catch (error: any) {
+        console.error("Failed to fetch battle results:", error);
+        return c.json({ error: 'Failed to fetch battle results' }, 500);
+    }
+});
+
+// 5. Get all battle results in a pretty text format
+app.get('/battle-results-pretty', async (c) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM battle_results ORDER BY start_time DESC');
+        const results = rows as any[];
+
+        if (results.length === 0) {
+            return c.text("No battle results found.");
+        }
+
+        let output = "Shogi Battle Results:\n\n";
+        results.forEach((result, index) => {
+            output += `--- Game ${index + 1} ---\n`;
+            output += `ID: ${result.id}\n`;
+            output += `Client 1: ${result.client1_name}\n`;
+            output += `Client 2: ${result.client2_name}\n`;
+            output += `Winner: ${result.winner_name || 'Draw'}\n`;
+            output += `Total Moves: ${result.total_moves}\n`;
+            output += `Duration: ${result.game_duration_ms} ms\n`;
+            output += `Start Time: ${new Date(result.start_time).toLocaleString()}\n`;
+            output += `End Time: ${result.end_time ? new Date(result.end_time).toLocaleString() : 'N/A'}\n`;
+            output += `CSA Record (first 100 chars): ${result.game_record_csa ? result.game_record_csa.substring(0, 100) + '...' : 'N/A'}\n`;
+            output += "\n";
+        });
+
+        return c.text(output);
+    } catch (error: any) {
+        console.error("Failed to fetch pretty battle results:", error);
+        return c.text('Failed to fetch pretty battle results', 500);
     }
 });
 

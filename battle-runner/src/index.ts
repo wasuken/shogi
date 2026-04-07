@@ -42,8 +42,12 @@ async function loadAI(aiName: string): Promise<AIFunction> {
 
 // --- API Client ---
 
-async function startGame(): Promise<string> {
-  const response = await fetch(`${SERVER_URL}/games`, { method: 'POST' });
+async function startGame(client1Name: string, client2Name: string): Promise<string> {
+  const response = await fetch(`${SERVER_URL}/games`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client1Name, client2Name }),
+  });
   if (!response.ok) {
       throw new Error(`Failed to start game: ${response.statusText}`);
   }
@@ -92,7 +96,7 @@ function toCSA(move: IMove & { promote?: boolean; kind?: Kind; }): string {
 async function runGame(gameId: string, player1: AIPlayer, player2: AIPlayer): Promise<string> {
     const shogi = new Shogi();
     const players = { 'b': player1, 'w': player2 };
-    
+
     console.log(`New game started: ${gameId}. ${player1.name} (black) vs ${player2.name} (white)`);
 
     let currentTurn = Color.Black;
@@ -165,12 +169,12 @@ async function main() {
         const whitePlayer = isRoundEven ? player2 : player1;
 
         try {
-            const gameId = await startGame();
+            const gameId = await startGame(blackPlayer.name, whitePlayer.name);
             const winnerName = await runGame(gameId, blackPlayer, whitePlayer);
-            if (scoreboard[winnerName]) {
-                scoreboard[winnerName]++;
-            } else {
+            if (winnerName === "draw") {
                 scoreboard.draws++;
+            } else {
+                scoreboard[winnerName]++;
             }
             console.log(`Round ${i + 1} finished. Current Score: ${argv.client1}: ${scoreboard[argv.client1]}, ${argv.client2}: ${scoreboard[argv.client2]}`);
         } catch (error) {
