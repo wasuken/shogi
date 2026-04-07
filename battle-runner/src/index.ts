@@ -1,14 +1,15 @@
-import { Shogi, Move } from 'shogi.js';
+import { Shogi, IMove, Color, Kind } from 'shogi.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import fetch from 'node-fetch';
-import path from 'path';
+const path = require('path');
 
 const SERVER_URL = 'http://localhost:3000';
 
 // --- Types ---
 
-type AIFunction = (shogi: Shogi) => Move | null;
+// AIFunction now expects an augmented IMove that can include 'promote' and 'kind' for drops.
+type AIFunction = (shogi: Shogi) => (IMove & { promote?: boolean; kind?: Kind; }) | null;
 
 interface AIPlayer {
     name: string;
@@ -23,8 +24,8 @@ async function loadAI(aiName: string): Promise<AIFunction> {
         throw new Error(`Invalid AI client name: ${aiName}. Valid options are: ${validClients.join(', ')}`);
     }
 
-    // Navigate from battle-runner/dist/index.js to client/...
-    const modulePath = path.join(__dirname, '..', '..', 'client', aiName, 'src', 'index.ts');
+    // Navigate from battle-runner/src/index.js to client/...
+    const modulePath = path.join(process.cwd(), '..', 'client', aiName, 'src', 'index.ts');
     
     try {
         const aiModule = await import(modulePath);
@@ -65,44 +66,76 @@ async function makeMove(gameId: string, move: string): Promise<any> {
 
 // --- Game Logic ---
 
+function toCSA(move: IMove & { promote?: boolean; kind?: Kind; }): string {
+    const yToChar = (y: number): string => String.fromCharCode('a'.charCodeAt(0) + y - 1);
+
+    const kindToCharMap: { [key in Kind]?: string } = {
+        'FU': 'P', 'KY': 'L', 'KE': 'N', 'GI': 'S', 'KI': 'G', 'KA': 'B', 'HI': 'R'
+    };
+
+    if (move.from === undefined) { // It's a drop move
+        if (!move.kind) {
+            throw new Error("Drop move is missing 'kind' property.");
+        }
+        const pieceChar = kindToCharMap[move.kind];
+        if (!pieceChar) {
+            throw new Error(`Unknown piece kind for drop: ${move.kind}`);
+        }
+        // Drop moves are like 'P*5e'
+        return `${pieceChar}*${move.to.x}${yToChar(move.to.y)}`;
+    }
+    const promote = move.promote ? '+' : '';
+    // Board moves are like '7g7f' or '2h7h+'
+    return `${move.from.x}${yToChar(move.from.y)}${move.to.x}${yToChar(move.to.y)}${promote}`;
+}
+
 async function runGame(gameId: string, player1: AIPlayer, player2: AIPlayer): Promise<string> {
     const shogi = new Shogi();
     const players = { 'b': player1, 'w': player2 };
     
     console.log(`New game started: ${gameId}. ${player1.name} (black) vs ${player2.name} (white)`);
 
-    while (!shogi.isGameOver()) {
-        const currentPlayer = players[shogi.turn];
+    let currentTurn = Color.Black;
+    let winnerName: string | null = null;
+
+    while (winnerName === null) {
+        const currentPlayer = currentTurn === Color.Black ? players['b'] : players['w'];
         const move = currentPlayer.findBestMove(shogi);
 
         if (!move) {
-            const winner = shogi.turn === 'b' ? player2.name : player1.name;
-            console.log(`No legal moves for ${currentPlayer.name}. Winner: ${winner}`);
-            return winner;
+            winnerName = currentTurn === Color.Black ? player2.name : player1.name;
+            console.log(`AI (${currentPlayer.name}) returned no move. Winner: ${winnerName}`);
+            break;
         }
 
         try {
-            shogi.move(move); // Apply move locally to check for errors and update state
-        } catch (e) {
-            const winner = shogi.turn === 'b' ? player2.name : player1.name;
-            console.error(`Illegal move attempted by ${currentPlayer.name}. Move: ${move.toCSAString()}. Winner: ${winner}`);
-            return winner;
+            if (move.from) {
+                shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
+            } else {
+                if (!move.kind) {
+                    throw new Error("Drop move is missing 'kind' property from AI.");
+                }
+                shogi.drop(move.to.x, move.to.y, move.kind);
+            }
+        } catch (e: any) {
+            winnerName = currentTurn === Color.Black ? player2.name : player1.name;
+            console.error(`Illegal move attempted by ${currentPlayer.name}. Move: ${JSON.stringify(move)}. Error: ${e.message}. Winner: ${winnerName}`);
+            break;
         }
 
-        const moveStr = move.toCSAString();
+        const moveStr = toCSA(move);
         const result = await makeMove(gameId, moveStr);
 
         if (result.status === 'game_over') {
-            const winnerName = result.winner === 'b' ? player1.name : player2.name;
+            winnerName = result.winner === 'b' ? player1.name : player2.name;
             console.log(`Game over. Winner: ${winnerName}`);
-            return winnerName;
+            break;
         }
+
+        currentTurn = currentTurn === Color.Black ? Color.White : Color.Black;
     }
     
-    // This part should ideally not be reached if the server correctly reports game over
-    const finalWinner = shogi.turn === 'b' ? player2.name : player1.name;
-    console.log(`Game ended by local check. Winner: ${finalWinner}`);
-    return finalWinner;
+    return winnerName || "draw";
 }
 
 

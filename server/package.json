@@ -11,7 +11,7 @@
     "@hono/zod-validator": "^0.7.6",
     "hono": "^4.12.11",
     "mysql2": "^3.20.0",
-    "shogi.js": "^4.0.1",
+    "shogi.js": "^5.5.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

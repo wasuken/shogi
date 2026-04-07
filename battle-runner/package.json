@@ -20,5 +20,8 @@
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2",
     "yargs": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/node-fetch": "^2.6.13"
   }
 }

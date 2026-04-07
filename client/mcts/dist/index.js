@@ -1,9 +1,9 @@
-import { Shogi, IMove, Color } from 'shogi.js';
-
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.findBestMove = findBestMove;
 // --- Helper function to get all legal moves ---
-
-function getAllLegalMoves(shogi: Shogi): IMove[] {
-    const moves: IMove[] = [];
+function getAllLegalMoves(shogi) {
+    const moves = [];
     // Board moves
     for (let x = 1; x <= 9; x++) {
         for (let y = 1; y <= 9; y++) {
@@ -19,15 +19,13 @@ function getAllLegalMoves(shogi: Shogi): IMove[] {
     moves.push(...shogi.getDropsBy(shogi.turn));
     return moves;
 }
-
-
 /**
- * AI a-la AlphaZero (placeholder).
+ * AI a-la MCTS (placeholder).
  * @param shogi The current game state.
  * @returns The best move found, or null if no moves are available.
  */
-export function findBestMove(shogi: Shogi): IMove | null {
-    // console.log("AlphaZero logic not implemented. Picking a random move.");
+function findBestMove(shogi) {
+    // console.log("MCTS logic not implemented. Picking a random move.");
     const legalMoves = getAllLegalMoves(shogi);
     if (legalMoves.length === 0) {
         return null;

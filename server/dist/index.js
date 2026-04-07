@@ -2,7 +2,8 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { Shogi } from 'shogi.js';
+import ShogiClass from 'shogi.js';
+const { Shogi } = ShogiClass;
 import mysql from 'mysql2/promise';
 // import { upgradeWebSocket } from 'hono/ws'
 const app = new Hono();
