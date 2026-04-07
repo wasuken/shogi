@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS games (
+  id VARCHAR(36) PRIMARY KEY,
+  winner VARCHAR(255),
+  moves INT,
+  ai_type VARCHAR(255),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  game_record JSON
+);

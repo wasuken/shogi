@@ -1,0 +1,24 @@
+{
+  "name": "battle-runner",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "battle": "ts-node src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@types/node": "^25.5.2",
+    "@types/yargs": "^17.0.35",
+    "node-fetch": "^2.7.0",
+    "shogi.js": "^5.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2",
+    "yargs": "^18.0.0"
+  }
+}
