@@ -305,9 +305,9 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
 
   return (
     <div className="shogi-board-container">
-      <h3>Custom Shogi Board</h3>
-      <p>Player 1: {parsedCsa.player1Name}</p>
-      <p>Player 2: {parsedCsa.player2Name}</p>
+      <h3>将棋盤</h3>
+      <p>先手: {parsedCsa.player1Name}</p>
+      <p>後手: {parsedCsa.player2Name}</p>
 
       <div className="hand-display gote-hand">
         {currentBoardState.goteHand.map((pieceType, index) => (
@@ -322,7 +322,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
         {Array.from({ length: 9 }, (_, colIdx) => 8 - colIdx).map(colIndex => ( // Iterate from 8 down to 0 for columns
           <div key={colIndex} className="board-col">
             {/* Render rows (ranks) from 1 to 9 */}
-            {Array.from({ length: 9 }, (_, rowIdx) => rowIdx).map(rowIndex => {
+            {Array.from({ length: 9 }, (_, rowIdx) => rowIdx).map(rowIndex => { // Iterate from 0 up to 8 for rows
               const piece = currentBoardState.board[colIndex][rowIndex];
               return (
                 <div key={`${colIndex}-${rowIndex}`} className="board-square">
@@ -347,28 +347,30 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
       </div>
 
       <div className="controls">
-        <button onClick={handlePreviousMove} disabled={currentMoveIndex === 0}>Previous</button>
-        <span>Move {currentMoveIndex} / {parsedCsa.boardStates.length - 1}</span>
-        <button onClick={handleNextMove} disabled={currentMoveIndex === parsedCsa.boardStates.length - 1}>Next</button>
+        <button onClick={handlePreviousMove} disabled={currentMoveIndex === 0}>前へ</button>
+        <span>手番 {currentMoveIndex} / {parsedCsa.boardStates.length - 1}</span>
+        <button onClick={handleNextMove} disabled={currentMoveIndex === parsedCsa.boardStates.length - 1}>次へ</button>
       </div>
 
       {evaluations && evaluations[currentMoveIndex] !== undefined && (
-        <p>Evaluation: {evaluations[currentMoveIndex]}</p>
+        <p>評価値: {evaluations[currentMoveIndex]}</p>
       )}
 
-      <h4>Sente Hand: {currentBoardState.senteHand.map(getKanjiPiece).join(', ')}</h4>
-      <h4>Gote Hand: {currentBoardState.goteHand.map(getKanjiPiece).join(', ')}</h4>
+      <h4>先手持ち駒: {currentBoardState.senteHand.map(getKanjiPiece).join(', ')}</h4>
+      <h4>後手持ち駒: {currentBoardState.goteHand.map(getKanjiPiece).join(', ')}</h4>
 
-      <h4>Moves:</h4>
+      <h4>棋譜:</h4>
       <ul>
         {parsedCsa.moves.map((move, index) => (
           <li key={index} style={{ fontWeight: index + 1 === currentMoveIndex ? 'bold' : 'normal' }}>
-            {move.player === '+' ? 'Sente' : 'Gote'}: {getKanjiPiece(move.piece)} {move.from ? `${move.from.col}${move.from.row}` : 'Drop'} to {move.to.col}{move.to.row}
+            {move.player === '+' ? '先手' : '後手'}: {getKanjiPiece(move.piece)} {move.from ? `${move.from.col}${move.from.row}` : '打'} to {move.to.col}{move.to.row}
           </li>
         ))}
       </ul>
     </div>
   );
 };
+
+export default ShogiBoard;
 
 export default ShogiBoard;
