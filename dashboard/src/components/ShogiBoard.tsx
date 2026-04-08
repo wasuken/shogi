@@ -1,0 +1,352 @@
+import React, { useState, useEffect } from 'react';
+
+// Define types for Shogi pieces, squares, and moves
+type PieceType = 'FU' | 'KY' | 'KE' | 'GI' | 'KI' | 'KA' | 'HI' | 'OU' | 'RY' | 'UM' |
+                 '+FU' | '+KY' | '+KE' | '+GI' | '+KA' | '+HI'; // Promoted pieces
+type Player = '+' | '-'; // Sente (first player) or Gote (second player)
+
+interface Piece {
+  type: PieceType;
+  player: Player;
+}
+
+interface Square {
+  row: number; // 1-9
+  col: number; // 1-9
+}
+
+interface Move {
+  player: Player;
+  from?: Square; // Optional, for drops
+  to: Square;
+  piece: PieceType;
+  time?: number; // Time taken for the move in seconds
+}
+
+interface BoardState {
+  board: (Piece | null)[][]; // 9x9 board
+  senteHand: PieceType[];
+  goteHand: PieceType[];
+  turn: Player;
+}
+
+interface ParsedCsa {
+  player1Name: string;
+  player2Name: string;
+  initialBoardState: BoardState;
+  moves: Move[];
+  boardStates: BoardState[]; // All board states throughout the game
+}
+
+// Helper to get piece from CSA string (e.g., "+FU")
+const getPieceFromCsa = (csaPiece: string): Piece => {
+  const player = csaPiece[0] as Player;
+  const type = csaPiece.substring(1) as PieceType;
+  return { player, type };
+};
+
+// Function to get the standard initial Shogi board setup
+const getStandardInitialBoard = (): (Piece | null)[][] => {
+  const board: (Piece | null)[][] = Array(9).fill(null).map(() => Array(9).fill(null));
+
+  // Gote (Player -) pieces
+  board[0][0] = getPieceFromCsa('-KY'); board[1][0] = getPieceFromCsa('-KE'); board[2][0] = getPieceFromCsa('-GI');
+  board[3][0] = getPieceFromCsa('-KI'); board[4][0] = getPieceFromCsa('-OU'); board[5][0] = getPieceFromCsa('-KI');
+  board[6][0] = getPieceFromCsa('-GI'); board[7][0] = getPieceFromCsa('-KE'); board[8][0] = getPieceFromCsa('-KY');
+  for (let i = 0; i < 9; i++) {
+    board[i][1] = getPieceFromCsa('-FU');
+  }
+  board[1][2] = getPieceFromCsa('-KA');
+  board[7][2] = getPieceFromCsa('-HI');
+
+  // Sente (Player +) pieces
+  board[0][8] = getPieceFromCsa('+KY'); board[1][8] = getPieceFromCsa('+KE'); board[2][8] = getPieceFromCsa('+GI');
+  board[3][8] = getPieceFromCsa('+KI'); board[4][8] = getPieceFromCsa('+OU'); board[5][8] = getPieceFromCsa('+KI');
+  board[6][8] = getPieceFromCsa('+GI'); board[7][8] = getPieceFromCsa('+KE'); board[8][8] = getPieceFromCsa('+KY');
+  for (let i = 0; i < 9; i++) {
+    board[i][7] = getPieceFromCsa('+FU');
+  }
+  board[1][6] = getPieceFromCsa('+HI');
+  board[7][6] = getPieceFromCsa('+KA');
+
+  return board;
+};
+
+// Function to apply a move to a board state
+const applyMove = (currentBoardState: BoardState, move: Move): BoardState => {
+  const newBoard = currentBoardState.board.map(row => [...row]);
+  const newSenteHand = [...currentBoardState.senteHand];
+  const newGoteHand = [...currentBoardState.goteHand];
+
+  const movingPiece: Piece = { player: move.player, type: move.piece };
+
+  if (move.from) {
+    // Regular move
+    const fromCol = 9 - move.from.col; // Adjust to 0-indexed (9-1=8, 9-9=0)
+    const fromRow = move.from.row - 1; // Adjust to 0-indexed
+    const toCol = 9 - move.to.col;
+    const toRow = move.to.row - 1;
+
+    const pieceOnFromSquare = newBoard[fromCol][fromRow];
+    if (!pieceOnFromSquare || pieceOnFromSquare.player !== move.player) {
+      console.warn('Invalid move: No piece or wrong player piece at from square', move);
+      // This should ideally not happen with valid CSA, but good for debugging
+      return currentBoardState;
+    }
+
+    // Capture logic
+    const capturedPiece = newBoard[toCol][toRow];
+    if (capturedPiece) {
+      // Demote captured piece and add to hand
+      const demotedType = capturedPiece.type.replace('+', '') as PieceType;
+      if (move.player === '+') {
+        newSenteHand.push(demotedType);
+      } else {
+        newGoteHand.push(demotedType);
+      }
+    }
+
+    newBoard[toCol][toRow] = movingPiece;
+    newBoard[fromCol][fromRow] = null;
+
+  } else {
+    // Drop move
+    const toCol = 9 - move.to.col;
+    const toRow = move.to.row - 1;
+
+    if (newBoard[toCol][toRow] !== null) {
+      console.warn('Invalid drop: Target square is not empty', move);
+      return currentBoardState;
+    }
+
+    // Remove piece from hand
+    if (move.player === '+') {
+      const index = newSenteHand.indexOf(move.piece);
+      if (index > -1) {
+        newSenteHand.splice(index, 1);
+      } else {
+        console.warn('Invalid drop: Piece not in sente hand', move);
+        return currentBoardState;
+      }
+    } else {
+      const index = newGoteHand.indexOf(move.piece);
+      if (index > -1) {
+        newGoteHand.splice(index, 1);
+      } else {
+        console.warn('Invalid drop: Piece not in gote hand', move);
+        return currentBoardState;
+      }
+    }
+    newBoard[toCol][toRow] = movingPiece;
+  }
+
+  return {
+    board: newBoard,
+    senteHand: newSenteHand,
+    goteHand: newGoteHand,
+    turn: move.player === '+' ? '-' : '+', // Toggle turn
+  };
+};
+
+
+// Function to parse CSA string
+const parseCsa = (csaString: string): ParsedCsa => {
+  const lines = csaString.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+
+  let player1Name = 'Player 1';
+  let player2Name = 'Player 2';
+  const moves: Move[] = [];
+  let currentBoard: (Piece | null)[][] = getStandardInitialBoard();
+  let senteHand: PieceType[] = [];
+  let goteHand: PieceType[] = [];
+  let turn: Player = '+';
+
+  // Process initial position if specified by PI
+  let inInitialPositionBlock = false;
+  for (const line of lines) {
+    if (line === 'PI') {
+      inInitialPositionBlock = true;
+      currentBoard = Array(9).fill(null).map(() => Array(9).fill(null)); // Clear board for PI setup
+      senteHand = [];
+      goteHand = [];
+      continue;
+    } else if (inInitialPositionBlock && (line.startsWith('+') || line.startsWith('-'))) {
+      // Example: +P27FU
+      const player = line[0] as Player;
+      const col = parseInt(line[2]);
+      const row = parseInt(line[3]);
+      const type = line.substring(4) as PieceType;
+      currentBoard[9 - col][row - 1] = { player, type }; // Corrected column indexing
+      continue;
+    } else if (inInitialPositionBlock && line.startsWith('P')) {
+      // Example: P1-KY-KE-GI-KI-OU-KI-GI-KE-KY
+      const row = parseInt(line[1]);
+      const pieces = line.substring(2).split(''); // Split by character
+      let col = 0;
+      for (let i = 0; i < pieces.length; i += 3) {
+        const pieceStr = pieces.slice(i, i + 3).join('');
+        if (pieceStr === ' * ') {
+          currentBoard[col][row - 1] = null;
+        } else {
+          currentBoard[col][row - 1] = getPieceFromCsa(pieceStr.trim());
+        }
+        col++;
+      }
+      continue;
+    } else if (inInitialPositionBlock && (line.startsWith('N+') || line.startsWith('N-'))) {
+      // End of PI block, or other metadata
+      inInitialPositionBlock = false;
+    }
+
+    if (!inInitialPositionBlock) {
+      if (line.startsWith('N+')) {
+        player1Name = line.substring(2);
+      } else if (line.startsWith('N-')) {
+        player2Name = line.substring(2);
+      } else if (line.startsWith('+') || line.startsWith('-')) {
+        // This is a move line
+        const player = line[0] as Player;
+        const fromCol = 9 - parseInt(line[1]);
+        const fromRow = parseInt(line[2]);
+        const toCol = 9 - parseInt(line[3]);
+        const toRow = parseInt(line[4]);
+        const pieceType = line.substring(5, 7) as PieceType; // Assuming 2-char piece type
+
+        const move: Move = {
+          player,
+          to: { row: toRow, col: toCol },
+          piece: pieceType,
+        };
+
+        if (fromCol !== 0 || fromRow !== 0) { // 00 indicates a drop
+          move.from = { row: fromRow, col: fromCol };
+        }
+        moves.push(move);
+      } else if (line.startsWith('T')) {
+        // Time expended, not currently used in applyMove
+      }
+    }
+  }
+
+  const initialBoardState: BoardState = {
+    board: currentBoard,
+    senteHand: senteHand,
+    goteHand: goteHand,
+    turn: turn,
+  };
+
+  const boardStates: BoardState[] = [initialBoardState];
+  let currentCalculatedBoardState = initialBoardState;
+
+  for (const move of moves) {
+    currentCalculatedBoardState = applyMove(currentCalculatedBoardState, move);
+    boardStates.push(currentCalculatedBoardState);
+  }
+
+  return { player1Name, player2Name, initialBoardState, moves, boardStates };
+};
+
+
+interface ShogiBoardProps {
+  csa: string;
+  evaluations: (number | null)[] | null;
+}
+
+const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
+  const [parsedCsa, setParsedCsa] = useState<ParsedCsa | null>(null);
+  const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(0);
+
+  useEffect(() => {
+    if (csa) {
+      setParsedCsa(parseCsa(csa));
+      setCurrentMoveIndex(0); // Reset to initial position when new CSA is loaded
+    }
+  }, [csa]);
+
+  if (!parsedCsa) {
+    return <p>Loading Shogi board...</p>;
+  }
+
+  const currentBoardState = parsedCsa.boardStates[currentMoveIndex];
+
+  const handleNextMove = () => {
+    if (currentMoveIndex < parsedCsa.boardStates.length - 1) {
+      setCurrentMoveIndex(prev => prev + 1);
+    }
+  };
+
+  const handlePreviousMove = () => {
+    if (currentMoveIndex > 0) {
+      setCurrentMoveIndex(prev => prev - 1);
+    }
+  };
+
+  return (
+    <div className="shogi-board-container">
+      <h3>Custom Shogi Board</h3>
+      <p>Player 1: {parsedCsa.player1Name}</p>
+      <p>Player 2: {parsedCsa.player2Name}</p>
+
+      <div className="hand-display gote-hand">
+        {currentBoardState.goteHand.map((pieceType, index) => (
+          <div key={`gote-hand-${index}`} className="hand-piece gote-piece">
+            {pieceType}
+          </div>
+        ))}
+      </div>
+
+      <div className="board-display">
+        {/* Render columns (files) from 9 to 1 */}
+        {Array.from({ length: 9 }, (_, colIdx) => 8 - colIdx).map(colIndex => ( // Iterate from 8 down to 0 for columns
+          <div key={colIndex} className="board-col">
+            {/* Render rows (ranks) from 1 to 9 */}
+            {Array.from({ length: 9 }, (_, rowIdx) => rowIdx).map(rowIndex => { // Iterate from 0 up to 8 for rows
+              const piece = currentBoardState.board[colIndex][rowIndex];
+              return (
+                <div key={`${colIndex}-${rowIndex}`} className="board-square">
+                  {piece && (
+                    <div className={piece.player === '-' ? 'gote-piece' : ''}>
+                      {piece.type}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <div className="hand-display sente-hand">
+        {currentBoardState.senteHand.map((pieceType, index) => (
+          <div key={`sente-hand-${index}`} className="hand-piece">
+            {pieceType}
+          </div>
+        ))}
+      </div>
+
+      <div className="controls">
+        <button onClick={handlePreviousMove} disabled={currentMoveIndex === 0}>Previous</button>
+        <span>Move {currentMoveIndex} / {parsedCsa.moves.length}</span>
+        <button onClick={handleNextMove} disabled={currentMoveIndex === parsedCsa.moves.length}>Next</button>
+      </div>
+
+      {evaluations && evaluations[currentMoveIndex] !== undefined && (
+        <p>Evaluation: {evaluations[currentMoveIndex]}</p>
+      )}
+
+      <h4>Sente Hand: {currentBoardState.senteHand.join(', ')}</h4>
+      <h4>Gote Hand: {currentBoardState.goteHand.join(', ')}</h4>
+
+      <h4>Moves:</h4>
+      <ul>
+        {parsedCsa.moves.map((move, index) => (
+          <li key={index} style={{ fontWeight: index + 1 === currentMoveIndex ? 'bold' : 'normal' }}>
+            {move.player === '+' ? 'Sente' : 'Gote'}: {move.piece} {move.from ? `${move.from.col}${move.from.row}` : 'Drop'} to {move.to.col}{move.to.row}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default ShogiBoard;
