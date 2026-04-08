@@ -45,6 +45,28 @@ const getPieceFromCsa = (csaPiece: string): Piece => {
   return { player, type };
 };
 
+const getKanjiPiece = (pieceType: PieceType): string => {
+  switch (pieceType) {
+    case 'FU': return '歩';
+    case 'KY': return '香';
+    case 'KE': return '桂';
+    case 'GI': return '銀';
+    case 'KI': return '金';
+    case 'KA': return '角';
+    case 'HI': return '飛';
+    case 'OU': return '王';
+    case 'RY': return '龍'; // Promoted Rook
+    case 'UM': return '馬'; // Promoted Bishop
+    case '+FU': return 'と'; // Promoted Pawn
+    case '+KY': return '成香'; // Promoted Lance
+    case '+KE': return '成桂'; // Promoted Knight
+    case '+GI': return '成銀'; // Promoted Silver
+    case '+KA': return '馬'; // Promoted Bishop (same as UM)
+    case '+HI': return '龍'; // Promoted Rook (same as RY)
+    default: return '';
+  }
+};
+
 // Function to get the standard initial Shogi board setup
 const getStandardInitialBoard = (): (Piece | null)[][] => {
   const board: (Piece | null)[][] = Array(9).fill(null).map(() => Array(9).fill(null));
@@ -290,7 +312,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
       <div className="hand-display gote-hand">
         {currentBoardState.goteHand.map((pieceType, index) => (
           <div key={`gote-hand-${index}`} className="hand-piece gote-piece">
-            {pieceType}
+            {getKanjiPiece(pieceType)}
           </div>
         ))}
       </div>
@@ -300,13 +322,13 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
         {Array.from({ length: 9 }, (_, colIdx) => 8 - colIdx).map(colIndex => ( // Iterate from 8 down to 0 for columns
           <div key={colIndex} className="board-col">
             {/* Render rows (ranks) from 1 to 9 */}
-            {Array.from({ length: 9 }, (_, rowIdx) => rowIdx).map(rowIndex => { // Iterate from 0 up to 8 for rows
+            {Array.from({ length: 9 }, (_, rowIdx) => rowIdx).map(rowIndex => {
               const piece = currentBoardState.board[colIndex][rowIndex];
               return (
                 <div key={`${colIndex}-${rowIndex}`} className="board-square">
                   {piece && (
                     <div className={piece.player === '-' ? 'gote-piece' : ''}>
-                      {piece.type}
+                      {getKanjiPiece(piece.type)}
                     </div>
                   )}
                 </div>
@@ -319,29 +341,29 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
       <div className="hand-display sente-hand">
         {currentBoardState.senteHand.map((pieceType, index) => (
           <div key={`sente-hand-${index}`} className="hand-piece">
-            {pieceType}
+            {getKanjiPiece(pieceType)}
           </div>
         ))}
       </div>
 
       <div className="controls">
         <button onClick={handlePreviousMove} disabled={currentMoveIndex === 0}>Previous</button>
-        <span>Move {currentMoveIndex} / {parsedCsa.moves.length}</span>
-        <button onClick={handleNextMove} disabled={currentMoveIndex === parsedCsa.moves.length}>Next</button>
+        <span>Move {currentMoveIndex} / {parsedCsa.boardStates.length - 1}</span>
+        <button onClick={handleNextMove} disabled={currentMoveIndex === parsedCsa.boardStates.length - 1}>Next</button>
       </div>
 
       {evaluations && evaluations[currentMoveIndex] !== undefined && (
         <p>Evaluation: {evaluations[currentMoveIndex]}</p>
       )}
 
-      <h4>Sente Hand: {currentBoardState.senteHand.join(', ')}</h4>
-      <h4>Gote Hand: {currentBoardState.goteHand.join(', ')}</h4>
+      <h4>Sente Hand: {currentBoardState.senteHand.map(getKanjiPiece).join(', ')}</h4>
+      <h4>Gote Hand: {currentBoardState.goteHand.map(getKanjiPiece).join(', ')}</h4>
 
       <h4>Moves:</h4>
       <ul>
         {parsedCsa.moves.map((move, index) => (
           <li key={index} style={{ fontWeight: index + 1 === currentMoveIndex ? 'bold' : 'normal' }}>
-            {move.player === '+' ? 'Sente' : 'Gote'}: {move.piece} {move.from ? `${move.from.col}${move.from.row}` : 'Drop'} to {move.to.col}{move.to.row}
+            {move.player === '+' ? 'Sente' : 'Gote'}: {getKanjiPiece(move.piece)} {move.from ? `${move.from.col}${move.from.row}` : 'Drop'} to {move.to.col}{move.to.row}
           </li>
         ))}
       </ul>
