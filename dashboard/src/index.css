@@ -109,3 +109,111 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* Shogi Board Styling */
+.shogi-board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.board-display {
+  display: grid;
+  grid-template-columns: repeat(9, 50px); /* 9 columns, 50px each */
+  grid-template-rows: repeat(9, 50px);    /* 9 rows, 50px each */
+  border: 2px solid #333;
+  background-color: #f0d9b5; /* Wood-like color */
+}
+
+.board-col {
+  display: contents; /* Allows children to be direct grid items */
+}
+
+.board-square {
+  width: 50px;
+  height: 50px;
+  border: 1px solid #ccc;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 18px;
+  font-weight: bold;
+  box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
+
+.board-square:nth-child(odd) {
+  background-color: #f0d9b5;
+}
+
+.board-square:nth-child(even) {
+  background-color: #e0c9a5;
+}
+
+/* Piece styling */
+.board-square > div {
+  /* Sente pieces */
+}
+
+.board-square > .gote-piece {
+  color: red; /* 後手の駒の文字色を赤に */
+  background-color: #d3d3d3; /* 後手の駒の背景色を少し暗く */
+}
+
+.controls {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.controls button {
+  padding: 8px 15px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.controls span {
+  font-size: 16px;
+}
+
+h4 {
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+li {
+  margin-bottom: 2px;
+}
+
+.hand-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 10px 0;
+  padding: 5px;
+  border: 1px solid #ccc;
+  min-height: 40px;
+  justify-content: center;
+  align-items: center;
+  width: 450px; /* Same width as the board */
+}
+
+.hand-piece {
+  padding: 3px 6px;
+  border: 1px solid #aaa;
+  background-color: #f9f9f9;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 3px;
+}
+
+.gote-hand .hand-piece {
+  color: red; /* 後手の手駒の文字色を赤に */
+  background-color: #d3d3d3; /* 後手の手駒の背景色を少し暗く */
+}
