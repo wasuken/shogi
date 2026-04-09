@@ -128,7 +128,7 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
  * @param shogi The current game state.
  * @returns The best move found, or null if no moves are available.
  */
-export function findBestMove(shogi: Shogi): IMove | null {
+export function findBestMove(shogi: Shogi): { move: IMove | null, score: number } {
     const depth = 2; // Search depth
     const isMaximizing = shogi.turn === Color.Black;
     // Create a new Shogi instance to not modify the original
@@ -137,6 +137,6 @@ export function findBestMove(shogi: Shogi): IMove | null {
     shogiCopy.turn = shogi.turn;
 
 
-    const { move } = minimax(shogiCopy, depth, -Infinity, Infinity, isMaximizing);
-    return move;
+    const { move, score } = minimax(shogiCopy, depth, -Infinity, Infinity, isMaximizing);
+    return { move, score };
 }

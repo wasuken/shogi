@@ -16,5 +16,6 @@ CREATE TABLE IF NOT EXISTS battle_results (
   game_duration_ms INT NOT NULL,
   start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
   end_time DATETIME NULL,
-  game_record_csa TEXT NULL
+  game_record_csa TEXT NULL,
+  evaluations JSON NULL
 );

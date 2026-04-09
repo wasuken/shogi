@@ -372,5 +372,3 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
 };
 
 export default ShogiBoard;
-
-export default ShogiBoard;

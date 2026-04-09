@@ -24,6 +24,7 @@ const pool = mysql.createPool({
 interface GameState {
   shogi: Shogi;
   moves: string[];
+  evaluations: (number | null)[];
   client1Name: string; // Name of the first AI client (black)
   client2Name: string; // Name of the second AI client (white)
   startTime: Date;
@@ -72,7 +73,7 @@ app.post('/games', zValidator('json', startGameSchema), (c) => {
   const gameId = crypto.randomUUID();
   const shogi = new Shogi();
   const startTime = new Date();
-  games.set(gameId, { shogi, moves: [], client1Name, client2Name, startTime });
+  games.set(gameId, { shogi, moves: [], evaluations: [], client1Name, client2Name, startTime });
   console.log(`Game started: ${gameId} (${client1Name} vs ${client2Name})`);
   return c.json({ gameId });
 });
@@ -80,15 +81,16 @@ app.post('/games', zValidator('json', startGameSchema), (c) => {
 // 2. Make a move
 const moveSchema = z.object({
   move: z.string(), // Expected format: e.g., '7g7f' or 'P*5e'
+  score: z.number().optional(),
 });
 
 app.post('/games/:id/move', zValidator('json', moveSchema), async (c) => {
   const { id } = c.req.param();
-  const { move } = c.req.valid('json');
+  const { move, score } = c.req.valid('json');
 
   try {
     const gameState = getGame(id);
-    const { shogi, moves } = gameState;
+    const { shogi, moves, evaluations } = gameState;
     const player = shogi.turn;
 
     // Parse and execute move
@@ -112,6 +114,7 @@ app.post('/games/:id/move', zValidator('json', moveSchema), async (c) => {
     }
 
     moves.push(move);
+    evaluations.push(score ?? null);
 
     // Check for game over by seeing if the opponent has any legal moves
     const legalMoves = getAllLegalMoves(shogi);
@@ -137,8 +140,8 @@ app.post('/games/:id/move', zValidator('json', moveSchema), async (c) => {
 
       // Insert into 'battle_results' table (new functionality)
       await pool.execute(
-        'INSERT INTO battle_results (id, client1_name, client2_name, winner_name, total_moves, game_duration_ms, start_time, end_time, game_record_csa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [id, gameState.client1Name, gameState.client2Name, winnerName, moves.length, gameDurationMs, gameState.startTime, gameState.endTime, gameRecordCsa]
+        'INSERT INTO battle_results (id, client1_name, client2_name, winner_name, total_moves, game_duration_ms, start_time, end_time, game_record_csa, evaluations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, gameState.client1Name, gameState.client2Name, winnerName, moves.length, gameDurationMs, gameState.startTime, gameState.endTime, gameRecordCsa, JSON.stringify(evaluations)]
       );
       
       console.log(`Game over: ${id}. Winner: ${winnerName}. Saved to DB.`);
@@ -172,7 +175,7 @@ app.get('/games/:id/stats', async (c) => {
 });
 
 // 4. Get all battle results
-app.get('/battle-results', async (c) => {
+app.get('/api/battle-results', async (c) => {
     try {
         const [rows] = await pool.query('SELECT * FROM battle_results ORDER BY start_time DESC');
         return c.json(rows);
@@ -183,7 +186,7 @@ app.get('/battle-results', async (c) => {
 });
 
 // 5. Get all battle results in a pretty text format
-app.get('/battle-results-pretty', async (c) => {
+app.get('/api/battle-results-pretty', async (c) => {
     try {
         const [rows] = await pool.query('SELECT * FROM battle_results ORDER BY start_time DESC');
         const results = rows as any[];
@@ -214,25 +217,26 @@ app.get('/battle-results-pretty', async (c) => {
     }
 });
 
-// 6. Get win/loss statistics
+// 7. Get CSA game record for a specific battle result
+app.get('/api/battle-results/:id/csa', async (c) => {
+    const { id } = c.req.param();
+    try {
+        const [rows] = await pool.query('SELECT game_record_csa FROM battle_results WHERE id = ?', [id]);
+        if ((rows as any[]).length === 0) {
+            return c.json({ error: 'Game record not found' }, 404);
+        }
+        const record = (rows as any[])[0].game_record_csa;
+        return c.text(record);
+    } catch (error: any) {
+        console.error(`Failed to fetch CSA record for game ${id}:`, error);
+        return c.json({ error: 'Failed to fetch CSA game record' }, 500);
+    }
+});
+
+// 8. Get win/loss statistics
 app.get('/api/stats/win-loss', async (c) => {
     try {
-        const query = `
-            SELECT
-                client_name,
-                COUNT(*) AS total_games_played,
-                SUM(CASE WHEN winner_name = client_name THEN 1 ELSE 0 END) AS wins,
-                SUM(CASE WHEN winner_name != client_name THEN 1 ELSE 0 END) AS losses,
-                SUM(CASE WHEN winner_name IS NULL THEN 1 ELSE 0 END) AS draws,
-                AVG(CASE WHEN winner_name != client_name THEN total_moves ELSE NULL END) AS avg_moves_to_loss
-            FROM (
-                SELECT client1_name AS client_name, winner_name, total_moves FROM battle_results
-                UNION ALL
-                SELECT client2_name AS client_name, winner_name, total_moves FROM battle_results
-            ) AS combined_results
-            GROUP BY client_name
-            ORDER BY wins DESC;
-        `;
+        const query = `\n            SELECT\n                client_name,\n                COUNT(*) AS total_games_played,\n                SUM(CASE WHEN winner_name = client_name THEN 1 ELSE 0 END) AS wins,\n                SUM(CASE WHEN winner_name != client_name THEN 1 ELSE 0 END) AS losses,\n                SUM(CASE WHEN winner_name IS NULL THEN 1 ELSE 0 END) AS draws,\n                AVG(CASE WHEN winner_name != client_name THEN total_moves ELSE NULL END) AS avg_moves_to_loss\n            FROM (\n                SELECT client1_name AS client_name, winner_name, total_moves FROM battle_results\n                UNION ALL\n                SELECT client2_name AS client_name, winner_name, total_moves FROM battle_results\n            ) AS combined_results\n            GROUP BY client_name\n            ORDER BY wins DESC;\n        `;
         const [rows] = await pool.query(query);
 
         const stats = (rows as any[]).map(row => ({
@@ -249,6 +253,25 @@ app.get('/api/stats/win-loss', async (c) => {
     } catch (error: any) {
         console.error("Failed to fetch win/loss statistics:", error);
         return c.json({ error: 'Failed to fetch win/loss statistics' }, 500);
+    }
+});
+
+app.get('/api/battle-results/:id/evaluations', async (c) => {
+    const { id } = c.req.param();
+    try {
+        const [rows] = await pool.query('SELECT evaluations FROM battle_results WHERE id = ?', [id]);
+        if ((rows as any[]).length === 0) {
+            return c.json({ error: 'Evaluations not found' }, 404);
+        }
+        let evaluations = (rows as any[])[0].evaluations;
+    // evaluationsが文字列の場合にパースする
+    if (typeof evaluations === 'string') {
+      evaluations = JSON.parse(evaluations);
+    }
+    return c.json(evaluations);
+    } catch (error: any) {
+        console.error(`Failed to fetch evaluations for game ${id}:`, error);
+        return c.json({ error: 'Failed to fetch evaluations' }, 500);
     }
 });
 

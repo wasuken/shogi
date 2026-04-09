@@ -38,30 +38,30 @@ const WinLossStats: React.FC = () => {
   }, []);
 
   if (loading) {
-    return <div className="p-4">Loading statistics...</div>;
+    return <div className="p-4">統計情報を読み込み中...</div>;
   }
 
   if (error) {
-    return <div className="p-4 text-red-500">Error: {error}</div>;
+    return <div className="p-4 text-red-500">エラー: {error}</div>;
   }
 
   return (
     <div className="p-4">
-      <h2 className="text-2xl font-bold mb-4">Win/Loss Statistics</h2>
+      <h2 className="text-2xl font-bold mb-4">勝敗統計</h2>
       {stats.length === 0 ? (
-        <p>No battle results found to display statistics.</p>
+        <p>統計情報を表示するための対戦結果がありません。</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white border border-gray-300">
             <thead>
               <tr>
-                <th className="py-2 px-4 border-b text-left">Client Name</th>
-                <th className="py-2 px-4 border-b text-left">Total Games</th>
-                <th className="py-2 px-4 border-b text-left">Wins</th>
-                <th className="py-2 px-4 border-b text-left">Losses</th>
-                <th className="py-2 px-4 border-b text-left">Draws</th>
-                <th className="py-2 px-4 border-b text-left">Win Rate (%)</th>
-                <th className="py-2 px-4 border-b text-left">Avg Moves to Loss</th>
+                <th className="py-2 px-4 border-b text-left">クライアント名</th>
+                <th className="py-2 px-4 border-b text-left">合計対局数</th>
+                <th className="py-2 px-4 border-b text-left">勝利数</th>
+                <th className="py-2 px-4 border-b text-left">敗北数</th>
+                <th className="py-2 px-4 border-b text-left">引き分け数</th>
+                <th className="py-2 px-4 border-b text-left">勝率 (%)</th>
+                <th className="py-2 px-4 border-b text-left">敗北までの平均手数</th>
               </tr>
             </thead>
             <tbody>

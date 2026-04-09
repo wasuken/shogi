@@ -8,8 +8,7 @@ const SERVER_URL = 'http://localhost:3000';
 
 // --- Types ---
 
-// AIFunction now expects an augmented IMove that can include 'promote' and 'kind' for drops.
-type AIFunction = (shogi: Shogi) => (IMove & { promote?: boolean; kind?: Kind; }) | null;
+type AIFunction = (shogi: Shogi) => { move: (IMove & { promote?: boolean; kind?: Kind; }) | null, score?: number };
 
 interface AIPlayer {
     name: string;
@@ -55,11 +54,11 @@ async function startGame(client1Name: string, client2Name: string): Promise<stri
   return data.gameId;
 }
 
-async function makeMove(gameId: string, move: string): Promise<any> {
+async function makeMove(gameId: string, move: string, score?: number): Promise<any> {
   const response = await fetch(`${SERVER_URL}/games/${gameId}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ move }),
+    body: JSON.stringify({ move, score }),
   });
   if (!response.ok) {
       const errorData = await response.json();
@@ -104,7 +103,7 @@ async function runGame(gameId: string, player1: AIPlayer, player2: AIPlayer): Pr
 
     while (winnerName === null) {
         const currentPlayer = currentTurn === Color.Black ? players['b'] : players['w'];
-        const move = currentPlayer.findBestMove(shogi);
+        const { move, score } = currentPlayer.findBestMove(shogi);
 
         if (!move) {
             winnerName = currentTurn === Color.Black ? player2.name : player1.name;
@@ -128,7 +127,7 @@ async function runGame(gameId: string, player1: AIPlayer, player2: AIPlayer): Pr
         }
 
         const moveStr = toCSA(move);
-        const result = await makeMove(gameId, moveStr);
+        const result = await makeMove(gameId, moveStr, score);
 
         if (result.status === 'game_over') {
             winnerName = result.winner === 'b' ? player1.name : player2.name;
