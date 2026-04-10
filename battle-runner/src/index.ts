@@ -1,4 +1,4 @@
-import { Shogi, IMove, Color, Kind } from 'shogi.js';
+import { Shogi, Color, Kind } from 'shogi.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import fetch from 'node-fetch';
@@ -6,9 +6,9 @@ const path = require('path');
 
 const SERVER_URL = 'http://localhost:3000';
 
-// --- Types ---
+import type { AIFunction, AIMove } from '../../shared/types';
 
-type AIFunction = (shogi: Shogi) => { move: (IMove & { promote?: boolean; kind?: Kind; }) | null, score?: number };
+// --- Types ---
 
 interface AIPlayer {
     name: string;
@@ -69,7 +69,7 @@ async function makeMove(gameId: string, move: string, score?: number): Promise<a
 
 // --- Game Logic ---
 
-function toCSA(move: IMove & { promote?: boolean; kind?: Kind; }): string {
+function toCSA(move: AIMove): string {
     const yToChar = (y: number): string => String.fromCharCode('a'.charCodeAt(0) + y - 1);
 
     const kindToCharMap: { [key in Kind]?: string } = {
@@ -80,7 +80,7 @@ function toCSA(move: IMove & { promote?: boolean; kind?: Kind; }): string {
         if (!move.kind) {
             throw new Error("Drop move is missing 'kind' property.");
         }
-        const pieceChar = kindToCharMap[move.kind];
+        const pieceChar = kindToCharMap[move.kind as Kind];
         if (!pieceChar) {
             throw new Error(`Unknown piece kind for drop: ${move.kind}`);
         }

@@ -1,4 +1,5 @@
 import { Shogi, IMove, Color, Kind, Piece } from 'shogi.js';
+import type { AIResult } from '../../../shared/types';
 
 // --- Helper function to get all legal moves ---
 
@@ -128,7 +129,7 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
  * @param shogi The current game state.
  * @returns The best move found, or null if no moves are available.
  */
-export function findBestMove(shogi: Shogi): { move: IMove | null, score: number } {
+export function findBestMove(shogi: Shogi): AIResult {
     const depth = 2; // Search depth
     const isMaximizing = shogi.turn === Color.Black;
     // Create a new Shogi instance to not modify the original

@@ -24,10 +24,11 @@ help:
 	@echo "            - Example: make battle C1=minimax C2=mcts ROUNDS=10"
 	@echo ""
 
-# --- Docker Management ---
-up:
-	@echo "Starting services..."
-	docker-compose up -d
+dev:
+	docker compose -f compose.yml -f compose.dev.yml up
+
+prod:
+	docker compose -f compose.yml -f compose.prod.yml up -d
 
 down:
 	@echo "Stopping services..."

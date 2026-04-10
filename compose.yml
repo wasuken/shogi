@@ -1,37 +1,4 @@
 services:
-  server:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    depends_on:
-      - db
-    restart: always
-
-  dashboard:
-    build:
-      context: ./dashboard
-      dockerfile: Dockerfile
-    ports:
-      - "8080:80" # Map container port 80 to host port 8080
-    depends_on:
-      - server # Dashboard depends on the server for API calls
-    restart: always
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    links:
-      - db:mysql
-    ports:
-      - 8081:80
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword # Use the same root password as your db service
-      PMA_HOST: db # This should be the name of your db service
-    depends_on:
-      - db
-    restart: always
-
   db:
     image: mysql:8.4
     environment:
