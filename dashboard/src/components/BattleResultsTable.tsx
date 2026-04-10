@@ -35,8 +35,12 @@ const BattleResultsTable: React.FC = () => {
         }
         const data: BattleResult[] = await response.json();
         setResults(data);
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          setError(e.message);
+        } else {
+          setError("An unknown error occurred.");
+        }
         console.error("Failed to fetch battle results:", e);
       } finally {
         setLoading(false);
