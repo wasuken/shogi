@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 // Define types for Shogi pieces, squares, and moves
 type PieceType = 'FU' | 'KY' | 'KE' | 'GI' | 'KI' | 'KA' | 'HI' | 'OU' | 'RY' | 'UM' |
@@ -181,7 +181,7 @@ const parseCsa = (csaString: string): ParsedCsa => {
   let currentBoard: (Piece | null)[][] = getStandardInitialBoard();
   let senteHand: PieceType[] = [];
   let goteHand: PieceType[] = [];
-  let turn: Player = '+';
+  const turn: Player = '+';
 
   // Process initial position if specified by PI
   let inInitialPositionBlock = false;
@@ -269,20 +269,32 @@ const parseCsa = (csaString: string): ParsedCsa => {
 };
 
 
+export interface EvaluationEntry {
+  move_number: number;
+  player: string;
+  score: number;
+  evaluated_by: string;
+}
+
 interface ShogiBoardProps {
   csa: string;
-  evaluations: (number | null)[] | null;
+  evaluations: EvaluationEntry[] | null;
 }
 
 const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
-  const [parsedCsa, setParsedCsa] = useState<ParsedCsa | null>(null);
   const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(0);
 
-  useEffect(() => {
+  const parsedCsa = useMemo(() => {
     if (csa) {
-      setParsedCsa(parseCsa(csa));
-      setCurrentMoveIndex(0); // Reset to initial position when new CSA is loaded
+      return parseCsa(csa);
     }
+    return null;
+  }, [csa]);
+
+  // This effect will run when csa changes, resetting the move index
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    setCurrentMoveIndex(0);
   }, [csa]);
 
   if (!parsedCsa) {
@@ -318,8 +330,8 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
       </div>
 
       <div className="board-display">
-        {/* Render columns (files) from 9 to 1 */}
-        {Array.from({ length: 9 }, (_, colIdx) => 8 - colIdx).map(colIndex => ( // Iterate from 8 down to 0 for columns
+        {/* Render columns (files) from 9 to 1 (left to right) */}
+        {Array.from({ length: 9 }, (_, colIndex) => colIndex).map(colIndex => ( // Iterate from 0 up to 8 for columns
           <div key={colIndex} className="board-col">
             {/* Render rows (ranks) from 1 to 9 */}
             {Array.from({ length: 9 }, (_, rowIdx) => rowIdx).map(rowIndex => { // Iterate from 0 up to 8 for rows
@@ -353,7 +365,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ csa, evaluations }) => {
       </div>
 
       {evaluations && evaluations[currentMoveIndex] !== undefined && (
-        <p>評価値: {evaluations[currentMoveIndex]}</p>
+        <p>評価値: {evaluations[currentMoveIndex]?.score}</p>
       )}
 
       <h4>先手持ち駒: {currentBoardState.senteHand.map(getKanjiPiece).join(', ')}</h4>
