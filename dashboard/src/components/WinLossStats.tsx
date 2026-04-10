@@ -27,8 +27,12 @@ const WinLossStats: React.FC = () => {
         }
         const data: WinLossStat[] = await response.json();
         setStats(data);
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          setError(e.message);
+        } else {
+          setError("An unknown error occurred.");
+        }
       } finally {
         setLoading(false);
       }
