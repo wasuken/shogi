@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import ShogiBoard from './ShogiBoard';
+import ShogiBoard, { type EvaluationEntry } from './ShogiBoard';
 
 interface ReplayModalProps {
   gameId: string;
@@ -8,7 +8,7 @@ interface ReplayModalProps {
 
 const ReplayModal: React.FC<ReplayModalProps> = ({ gameId, onClose }) => {
   const [csa, setCsa] = useState<string | null>(null);
-  const [evaluations, setEvaluations] = useState<(number | null)[] | null>(null);
+  const [evaluations, setEvaluations] = useState<EvaluationEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -36,8 +36,12 @@ const ReplayModal: React.FC<ReplayModalProps> = ({ gameId, onClose }) => {
           setEvaluations(evalsData);
         }
 
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          setError(e.message);
+        } else {
+          setError("An unknown error occurred.");
+        }
       } finally {
         setLoading(false);
       }
