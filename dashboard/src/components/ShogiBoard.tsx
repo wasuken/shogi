@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 // Define types for Shogi pieces, squares, and moves
 type PieceType = 'FU' | 'KY' | 'KE' | 'GI' | 'KI' | 'KA' | 'HI' | 'OU' | 'RY' | 'UM' |
-                 '+FU' | '+KY' | '+KE' | '+GI' | '+KA' | '+HI'; // Promoted pieces
+                 'TO' | 'NY' | 'NK' | 'NG' | // Promoted pawn/lance/knight/silver (CSA notation)
+                 '+FU' | '+KY' | '+KE' | '+GI' | '+KA' | '+HI'; // Promoted pieces (alternative notation)
 type Player = '+' | '-'; // Sente (first player) or Gote (second player)
 
 interface Piece {
@@ -55,14 +56,18 @@ const getKanjiPiece = (pieceType: PieceType): string => {
     case 'KA': return '角';
     case 'HI': return '飛';
     case 'OU': return '王';
-    case 'RY': return '龍'; // Promoted Rook
-    case 'UM': return '馬'; // Promoted Bishop
-    case '+FU': return 'と'; // Promoted Pawn
-    case '+KY': return '成香'; // Promoted Lance
-    case '+KE': return '成桂'; // Promoted Knight
-    case '+GI': return '成銀'; // Promoted Silver
-    case '+KA': return '馬'; // Promoted Bishop (same as UM)
-    case '+HI': return '龍'; // Promoted Rook (same as RY)
+    case 'RY': return '龍';
+    case 'UM': return '馬';
+    case 'TO': return 'と';
+    case 'NY': return '成香';
+    case 'NK': return '成桂';
+    case 'NG': return '成銀';
+    case '+FU': return 'と';
+    case '+KY': return '成香';
+    case '+KE': return '成桂';
+    case '+GI': return '成銀';
+    case '+KA': return '馬';
+    case '+HI': return '龍';
     default: return '';
   }
 };
@@ -119,8 +124,13 @@ const applyMove = (currentBoardState: BoardState, move: Move): BoardState => {
     // Capture logic
     const capturedPiece = newBoard[toCol][toRow];
     if (capturedPiece) {
-      // Demote captured piece and add to hand
-      const demotedType = capturedPiece.type.replace('+', '') as PieceType;
+      const demoteMap: Partial<Record<string, PieceType>> = {
+        'TO': 'FU', 'NY': 'KY', 'NK': 'KE', 'NG': 'GI',
+        'UM': 'KA', 'RY': 'HI',
+        '+FU': 'FU', '+KY': 'KY', '+KE': 'KE', '+GI': 'GI',
+        '+KA': 'KA', '+HI': 'HI',
+      };
+      const demotedType = (demoteMap[capturedPiece.type] ?? capturedPiece.type) as PieceType;
       if (move.player === '+') {
         newSenteHand.push(demotedType);
       } else {
