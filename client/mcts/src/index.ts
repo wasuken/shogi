@@ -1,24 +1,44 @@
-import { Shogi, IMove, Color } from 'shogi.js';
+import { Shogi, IMove, Color, type Kind } from 'shogi.js';
 import type { AIResult } from '../../../shared/types';
 
 // --- Helper function to get all legal moves ---
 
 function getAllLegalMoves(shogi: Shogi): IMove[] {
-    const moves: IMove[] = [];
-    // Board moves
+    const pseudoLegal: IMove[] = [];
+
     for (let x = 1; x <= 9; x++) {
         for (let y = 1; y <= 9; y++) {
             const piece = shogi.get(x, y);
             if (piece && piece.color === shogi.turn) {
-                // Note: This gets pseudo-legal moves. It doesn't check for checks.
-                moves.push(...shogi.getMovesFrom(x, y));
+                pseudoLegal.push(...shogi.getMovesFrom(x, y));
             }
         }
     }
-    // Drop moves
-    // Note: This gets pseudo-legal moves. It doesn't check for nifu (two pawns in a file).
-    moves.push(...shogi.getDropsBy(shogi.turn));
-    return moves;
+    pseudoLegal.push(...shogi.getDropsBy(shogi.turn));
+
+    return pseudoLegal.filter(move => {
+        let capturedKind: Kind | undefined = undefined;
+
+        if (move.from) {
+            const captured = shogi.get(move.to.x, move.to.y);
+            capturedKind = captured?.kind;
+            shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
+        } else {
+            shogi.drop(move.to.x, move.to.y, move.kind!);
+        }
+
+        const currentTurn = shogi.turn;
+        const myColor = currentTurn === Color.Black ? Color.White : Color.Black;
+        const inCheck = shogi.isCheck(myColor);
+
+        if (move.from) {
+            shogi.unmove(move.from.x, move.from.y, move.to.x, move.to.y, move.promote, capturedKind);
+        } else {
+            shogi.undrop(move.to.x, move.to.y);
+        }
+
+        return !inCheck;
+    });
 }
 
 
