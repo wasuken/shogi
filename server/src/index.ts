@@ -78,42 +78,80 @@ app.post('/games', zValidator('json', startGameSchema), (c) => {
   return c.json({ gameId });
 });
 
+// Helper to parse CSA move string into shogi.js IMove format
+function parseCsaMoveToIMove(csaMove: string): IMove {
+    // Example: +27FU, +0077FU
+    const playerChar = csaMove[0]; // '+' or '-'
+    const fromCol = parseInt(csaMove[1]);
+    const fromRow = parseInt(csaMove[2]);
+    const toCol = parseInt(csaMove[3]);
+    const toRow = parseInt(csaMove[4]);
+    const pieceStr = csaMove.substring(5); // e.g., 'FU', 'TO'
+
+    const csaPieceToKindMap: { [key: string]: Kind } = {
+        'FU': 'FU', 'KY': 'KY', 'KE': 'KE', 'GI': 'GI', 'KI': 'KI', 'KA': 'KA', 'HI': 'HI', 'OU': 'OU',
+        'TO': 'TO', 'NY': 'NY', 'NK': 'NK', 'NG': 'NG', 'UM': 'UM', 'RY': 'RY'
+    };
+
+    let kind: Kind;
+    let promote = false;
+
+    // Handle promoted pieces in CSA string (e.g., 'TO' means promoted FU)
+    switch (pieceStr) {
+        case 'TO': kind = 'FU'; promote = true; break;
+        case 'NY': kind = 'KY'; promote = true; break;
+        case 'NK': kind = 'KE'; promote = true; break;
+        case 'NG': kind = 'GI'; promote = true; break;
+        case 'UM': kind = 'KA'; promote = true; break;
+        case 'RY': kind = 'HI'; promote = true; break;
+        default:
+            kind = csaPieceToKindMap[pieceStr];
+            if (!kind) throw new Error(`Unknown piece kind in CSA move: ${pieceStr}`);
+            break;
+    }
+
+    if (fromCol === 0 && fromRow === 0) { // Drop move
+        return {
+            to: { x: toCol, y: toRow },
+            kind: kind, // For drops, kind is the piece being dropped
+        };
+    } else { // Regular move
+        return {
+            from: { x: fromCol, y: fromRow },
+            to: { x: toCol, y: toRow },
+            promote: promote,
+        };
+    }
+}
+
 // 2. Make a move
 const moveSchema = z.object({
-  move: z.string(), // Expected format: e.g., '7g7f' or 'P*5e'
+  move: z.string(), // Expected format: e.g., '+27FU' or '+0077FU'
   score: z.number().optional(),
 });
 
 app.post('/games/:id/move', zValidator('json', moveSchema), async (c) => {
   const { id } = c.req.param();
-  const { move, score } = c.req.valid('json');
+  const { move: csaMoveString, score } = c.req.valid('json');
 
   try {
     const gameState = getGame(id);
     const { shogi, moves, evaluations } = gameState;
     const player = shogi.turn; // Player before the move
 
-    // Parse and execute move
-    if (move.includes('*')) { // Drop move e.g. P*5e
-      const [piece, pos] = move.split('*');
-      const toX = parseInt(pos[0], 10);
-      const toY = pos[1].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
-      const pieceMap: { [key: string]: Kind } = {
-        'P': 'FU', 'L': 'KY', 'N': 'KE', 'S': 'GI', 'G': 'KI', 'B': 'KA', 'R': 'HI'
-      };
-      const kind = pieceMap[piece.toUpperCase() as keyof typeof pieceMap];
-      if (!kind) throw new Error(`Invalid piece to drop: ${piece}`);
-      shogi.drop(toX, toY, kind);
-    } else { // Board move e.g. 7g7f or 2h7h+
-      const fromX = parseInt(move[0], 10);
-      const fromY = move[1].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
-      const toX = parseInt(move[2], 10);
-      const toY = move[3].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
-      const promote = move.length === 5 && move[4] === '+';
-      shogi.move(fromX, fromY, toX, toY, promote);
+    const parsedMove = parseCsaMoveToIMove(csaMoveString);
+
+    // Execute move
+    if (parsedMove.from) {
+        shogi.move(parsedMove.from.x, parsedMove.from.y, parsedMove.to.x, parsedMove.to.y, parsedMove.promote);
+    } else {
+        if (!parsedMove.kind) {
+            throw new Error("Drop move is missing 'kind' property after parsing CSA.");
+        }
+        shogi.drop(parsedMove.to.x, parsedMove.to.y, parsedMove.kind);
     }
 
-    moves.push(move);
+    moves.push(csaMoveString);
     evaluations.push(score ?? null);
 
     // Check for game over by seeing if the opponent has any legal moves

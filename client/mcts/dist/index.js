@@ -22,14 +22,14 @@ function getAllLegalMoves(shogi) {
 /**
  * AI a-la MCTS (placeholder).
  * @param shogi The current game state.
- * @returns The best move found, or null if no moves are available.
+ * @returns The best move found, or null if no moves are available, along with a score.
  */
 function findBestMove(shogi) {
     // console.log("MCTS logic not implemented. Picking a random move.");
     const legalMoves = getAllLegalMoves(shogi);
     if (legalMoves.length === 0) {
-        return null;
+        return { move: null, score: 0 };
     }
     const randomIndex = Math.floor(Math.random() * legalMoves.length);
-    return legalMoves[randomIndex];
+    return { move: legalMoves[randomIndex], score: 0 };
 }

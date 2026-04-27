@@ -228,20 +228,20 @@ const parseCsa = (csaString: string): ParsedCsa => {
       } else if (line.startsWith('+') || line.startsWith('-')) {
         // This is a move line
         const player = line[0] as Player;
-        const fromCol = 9 - parseInt(line[1]);
-        const fromRow = parseInt(line[2]);
-        const toCol = 9 - parseInt(line[3]);
-        const toRow = parseInt(line[4]);
+        const csaFromCol = parseInt(line[1]);
+        const csaFromRow = parseInt(line[2]);
+        const csaToCol = parseInt(line[3]);
+        const csaToRow = parseInt(line[4]);
         const pieceType = line.substring(5, 7) as PieceType; // Assuming 2-char piece type
 
         const move: Move = {
           player,
-          to: { row: toRow, col: toCol },
+          to: { row: csaToRow, col: csaToCol },
           piece: pieceType,
         };
 
-        if (fromCol !== 0 || fromRow !== 0) { // 00 indicates a drop
-          move.from = { row: fromRow, col: fromCol };
+        if (csaFromCol !== 0 || csaFromRow !== 0) { // 00 indicates a drop
+          move.from = { row: csaFromRow, col: csaFromCol };
         }
         moves.push(move);
       } else if (line.startsWith('T')) {

@@ -69,31 +69,45 @@ async function makeMove(gameId: string, move: string, score?: number): Promise<a
 
 // --- Game Logic ---
 
-function toCSA(move: AIMove): string {
-    const yToChar = (y: number): string => String.fromCharCode('a'.charCodeAt(0) + y - 1);
+function toCSA(player: Color, move: AIMove, movedPieceKind: Kind | undefined): string {
+    const playerChar = player === Color.Black ? '+' : '-';
 
-    const kindToCharMap: { [key in Kind]?: string } = {
-        'FU': 'P', 'KY': 'L', 'KE': 'N', 'GI': 'S', 'KI': 'G', 'KA': 'B', 'HI': 'R'
+    // Helper to get the CSA piece string based on Kind and promotion status
+    const getCsaPieceString = (kind: Kind, promote: boolean | undefined): string => {
+        if (promote) {
+            switch (kind) {
+                case 'FU': return 'TO';
+                case 'KY': return 'NY';
+                case 'KE': return 'NK';
+                case 'GI': return 'NG';
+                case 'KA': return 'UM';
+                case 'HI': return 'RY';
+                default: return kind; // KI, OU don't promote
+            }
+        }
+        return kind;
     };
+
+    let csaPiece: string;
 
     if (move.from === undefined) { // It's a drop move
         if (!move.kind) {
             throw new Error("Drop move is missing 'kind' property.");
         }
-        const pieceChar = kindToCharMap[move.kind as Kind];
-        if (!pieceChar) {
-            throw new Error(`Unknown piece kind for drop: ${move.kind}`);
+        csaPiece = getCsaPieceString(move.kind, false); // Drops are never promoted from hand
+        return `${playerChar}00${move.to.x}${move.to.y}${csaPiece}`;
+    } else { // Regular move
+        if (!movedPieceKind) {
+            throw new Error("Moved piece kind is missing for CSA conversion.");
         }
-        // Drop moves are like 'P*5e'
-        return `${pieceChar}*${move.to.x}${yToChar(move.to.y)}`;
+        csaPiece = getCsaPieceString(movedPieceKind, move.promote);
+        return `${playerChar}${move.from.x}${move.from.y}${move.to.x}${move.to.y}${csaPiece}`;
     }
-    const promote = move.promote ? '+' : '';
-    // Board moves are like '7g7f' or '2h7h+'
-    return `${move.from.x}${yToChar(move.from.y)}${move.to.x}${yToChar(move.to.y)}${promote}`;
 }
 
 async function runGame(gameId: string, player1: AIPlayer, player2: AIPlayer): Promise<string> {
-    const shogi = new Shogi();
+    const shogi = new Shogi({ preset: 'HIRATE' });
+    shogi.initializeFromSFENString('lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1');
     const players = { 'b': player1, 'w': player2 };
 
     console.log(`New game started: ${gameId}. ${player1.name} (black) vs ${player2.name} (white)`);
@@ -103,7 +117,9 @@ async function runGame(gameId: string, player1: AIPlayer, player2: AIPlayer): Pr
 
     while (winnerName === null) {
         const currentPlayer = currentTurn === Color.Black ? players['b'] : players['w'];
+        console.log(`DEBUG: Before AI move. Current SFEN: ${shogi.toSFENString()}`);
         const { move, score } = currentPlayer.findBestMove(shogi);
+        console.log(`DEBUG: AI returned move: ${JSON.stringify(move)}`);
 
         if (!move) {
             winnerName = currentTurn === Color.Black ? player2.name : player1.name;
@@ -111,22 +127,34 @@ async function runGame(gameId: string, player1: AIPlayer, player2: AIPlayer): Pr
             break;
         }
 
+        let movedPieceKind: Kind | undefined;
+        if (move.from) {
+            const piece = shogi.get(move.from.x, move.from.y);
+            if (!piece) {
+                throw new Error(`Piece not found at ${move.from.x}, ${move.from.y} before move.`);
+            }
+            movedPieceKind = piece.kind;
+        } else {
+            movedPieceKind = move.kind; // For drop moves, kind is already in move object
+        }
+
         try {
             if (move.from) {
-                shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
+                shogi.move(move.from.x, move.from.y, move.to.x, move.to.y);
             } else {
                 if (!move.kind) {
                     throw new Error("Drop move is missing 'kind' property from AI.");
                 }
                 shogi.drop(move.to.x, move.to.y, move.kind);
             }
+            console.log(`DEBUG: After applying move. New SFEN: ${shogi.toSFENString()}`);
         } catch (e: any) {
             winnerName = currentTurn === Color.Black ? player2.name : player1.name;
             console.error(`Illegal move attempted by ${currentPlayer.name}. Move: ${JSON.stringify(move)}. Error: ${e.message}. Winner: ${winnerName}`);
             break;
         }
 
-        const moveStr = toCSA(move);
+        const moveStr = toCSA(currentTurn, move, movedPieceKind);
         const result = await makeMove(gameId, moveStr, score);
 
         if (result.status === 'game_over') {

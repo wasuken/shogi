@@ -63,19 +63,23 @@ async function loadAI(aiName) {
     }
 }
 // --- API Client ---
-async function startGame() {
-    const response = await (0, node_fetch_1.default)(`${SERVER_URL}/games`, { method: 'POST' });
+async function startGame(client1Name, client2Name) {
+    const response = await (0, node_fetch_1.default)(`${SERVER_URL}/games`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client1Name, client2Name }),
+    });
     if (!response.ok) {
         throw new Error(`Failed to start game: ${response.statusText}`);
     }
     const data = await response.json();
     return data.gameId;
 }
-async function makeMove(gameId, move) {
+async function makeMove(gameId, move, score) {
     const response = await (0, node_fetch_1.default)(`${SERVER_URL}/games/${gameId}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ move }),
+        body: JSON.stringify({ move, score }),
     });
     if (!response.ok) {
         const errorData = await response.json();
@@ -85,50 +89,65 @@ async function makeMove(gameId, move) {
 }
 // --- Game Logic ---
 function toCSA(move) {
-    if (move.isDrop) {
-        return `00${move.to.x}${move.to.y}${move.piece}`;
+    const yToChar = (y) => String.fromCharCode('a'.charCodeAt(0) + y - 1);
+    const kindToCharMap = {
+        'FU': 'P', 'KY': 'L', 'KE': 'N', 'GI': 'S', 'KI': 'G', 'KA': 'B', 'HI': 'R'
+    };
+    if (move.from === undefined) { // It's a drop move
+        if (!move.kind) {
+            throw new Error("Drop move is missing 'kind' property.");
+        }
+        const pieceChar = kindToCharMap[move.kind];
+        if (!pieceChar) {
+            throw new Error(`Unknown piece kind for drop: ${move.kind}`);
+        }
+        // Drop moves are like 'P*5e'
+        return `${pieceChar}*${move.to.x}${yToChar(move.to.y)}`;
     }
     const promote = move.promote ? '+' : '';
-    return `${move.from.x}${move.from.y}${move.to.x}${move.to.y}${promote}`;
+    // Board moves are like '7g7f' or '2h7h+'
+    return `${move.from.x}${yToChar(move.from.y)}${move.to.x}${yToChar(move.to.y)}${promote}`;
 }
 async function runGame(gameId, player1, player2) {
     const shogi = new shogi_js_1.Shogi();
     const players = { 'b': player1, 'w': player2 };
     console.log(`New game started: ${gameId}. ${player1.name} (black) vs ${player2.name} (white)`);
-    while (!shogi.game_over) {
-        const currentPlayer = shogi.turn === shogi_js_1.Color.BLACK ? players['b'] : players['w'];
-        const move = currentPlayer.findBestMove(shogi);
+    let currentTurn = shogi_js_1.Color.Black;
+    let winnerName = null;
+    while (winnerName === null) {
+        const currentPlayer = currentTurn === shogi_js_1.Color.Black ? players['b'] : players['w'];
+        const { move, score } = currentPlayer.findBestMove(shogi);
         if (!move) {
-            const winner = shogi.turn === shogi_js_1.Color.BLACK ? player2.name : player1.name;
-            console.log(`No legal moves for ${currentPlayer.name}. Winner: ${winner}`);
-            return winner;
+            winnerName = currentTurn === shogi_js_1.Color.Black ? player2.name : player1.name;
+            console.log(`AI (${currentPlayer.name}) returned no move. Winner: ${winnerName}`);
+            break;
         }
         try {
-            // Apply move locally to check for errors and update state
             if (move.from) {
                 shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
             }
             else {
-                shogi.drop(move.to.x, move.to.y, move.piece);
+                if (!move.kind) {
+                    throw new Error("Drop move is missing 'kind' property from AI.");
+                }
+                shogi.drop(move.to.x, move.to.y, move.kind);
             }
         }
         catch (e) {
-            const winner = shogi.turn === shogi_js_1.Color.BLACK ? player2.name : player1.name;
-            console.error(`Illegal move attempted by ${currentPlayer.name}. Move: ${JSON.stringify(move)}. Winner: ${winner}`);
-            return winner;
+            winnerName = currentTurn === shogi_js_1.Color.Black ? player2.name : player1.name;
+            console.error(`Illegal move attempted by ${currentPlayer.name}. Move: ${JSON.stringify(move)}. Error: ${e.message}. Winner: ${winnerName}`);
+            break;
         }
         const moveStr = toCSA(move);
-        const result = await makeMove(gameId, moveStr);
+        const result = await makeMove(gameId, moveStr, score);
         if (result.status === 'game_over') {
-            const winnerName = result.winner === 'b' ? player1.name : player2.name;
+            winnerName = result.winner === 'b' ? player1.name : player2.name;
             console.log(`Game over. Winner: ${winnerName}`);
-            return winnerName;
+            break;
         }
+        currentTurn = currentTurn === shogi_js_1.Color.Black ? shogi_js_1.Color.White : shogi_js_1.Color.Black;
     }
-    // This part should ideally not be reached if the server correctly reports game over
-    const finalWinner = shogi.turn === shogi_js_1.Color.BLACK ? player2.name : player1.name;
-    console.log(`Game ended by local check. Winner: ${finalWinner}`);
-    return finalWinner;
+    return winnerName || "draw";
 }
 // --- Main Execution ---
 async function main() {
@@ -149,13 +168,13 @@ async function main() {
         const blackPlayer = isRoundEven ? player1 : player2;
         const whitePlayer = isRoundEven ? player2 : player1;
         try {
-            const gameId = await startGame();
+            const gameId = await startGame(blackPlayer.name, whitePlayer.name);
             const winnerName = await runGame(gameId, blackPlayer, whitePlayer);
-            if (scoreboard[winnerName]) {
-                scoreboard[winnerName]++;
+            if (winnerName === "draw") {
+                scoreboard.draws++;
             }
             else {
-                scoreboard.draws++;
+                scoreboard[winnerName]++;
             }
             console.log(`Round ${i + 1} finished. Current Score: ${argv.client1}: ${scoreboard[argv.client1]}, ${argv.client2}: ${scoreboard[argv.client2]}`);
         }
