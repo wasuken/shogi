@@ -140,7 +140,7 @@ async function runGame(gameId: string, player1: AIPlayer, player2: AIPlayer): Pr
 
         try {
             if (move.from) {
-                shogi.move(move.from.x, move.from.y, move.to.x, move.to.y);
+                shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
             } else {
                 if (!move.kind) {
                     throw new Error("Drop move is missing 'kind' property from AI.");

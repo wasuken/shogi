@@ -1,24 +1,44 @@
-import { Shogi, IMove, Color, Kind, Piece } from 'shogi.js';
+import { Shogi, IMove, Color, type Kind } from 'shogi.js';
 import type { AIResult } from '../../../shared/types';
 
 // --- Helper function to get all legal moves ---
 
 function getAllLegalMoves(shogi: Shogi): IMove[] {
-    const moves: IMove[] = [];
-    // Board moves
+    const pseudoLegal: IMove[] = [];
+
     for (let x = 1; x <= 9; x++) {
         for (let y = 1; y <= 9; y++) {
             const piece = shogi.get(x, y);
             if (piece && piece.color === shogi.turn) {
-                // Note: This gets pseudo-legal moves. It doesn't check for checks.
-                moves.push(...shogi.getMovesFrom(x, y));
+                pseudoLegal.push(...shogi.getMovesFrom(x, y));
             }
         }
     }
-    // Drop moves
-    // Note: This gets pseudo-legal moves. It doesn't check for nifu (two pawns in a file).
-    moves.push(...shogi.getDropsBy(shogi.turn));
-    return moves;
+    pseudoLegal.push(...shogi.getDropsBy(shogi.turn));
+
+    return pseudoLegal.filter(move => {
+        let capturedKind: Kind | undefined = undefined;
+
+        if (move.from) {
+            const captured = shogi.get(move.to.x, move.to.y);
+            capturedKind = captured?.kind;
+            shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
+        } else {
+            shogi.drop(move.to.x, move.to.y, move.kind!);
+        }
+
+        const currentTurn = shogi.turn;
+        const myColor = currentTurn === Color.Black ? Color.White : Color.Black;
+        const inCheck = shogi.isCheck(myColor);
+
+        if (move.from) {
+            shogi.unmove(move.from.x, move.from.y, move.to.x, move.to.y, move.promote, capturedKind);
+        } else {
+            shogi.undrop(move.to.x, move.to.y);
+        }
+
+        return !inCheck;
+    });
 }
 
 
@@ -63,11 +83,8 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
     let maxEval = -Infinity;
     for (const move of legalMoves) {
       const capturedPiece = move.from ? shogi.get(move.to.x, move.to.y)?.kind : undefined;
-      let shouldPromote = false;
       if (move.from) {
-        const canPromote = (Shogi["getIllegalUnpromotedRow"](shogi.get(move.from.x, move.from.y).kind, shogi.turn, move.to.y) || Shogi["getIllegalUnpromotedRow"](shogi.get(move.from.x, move.from.y).kind, shogi.turn, move.from.y));
-        shouldPromote = canPromote && (move.to.y <= 3 || move.from.y <= 3);
-        shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, shouldPromote);
+        shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
       } else {
         shogi.drop(move.to.x, move.to.y, move.kind!);
       }
@@ -75,7 +92,7 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
       const { score } = minimax(shogi, depth - 1, alpha, beta, false);
 
       if (move.from) {
-        shogi.unmove(move.from.x, move.from.y, move.to.x, move.to.y, shouldPromote, capturedPiece);
+        shogi.unmove(move.from.x, move.from.y, move.to.x, move.to.y, move.promote, capturedPiece);
       } else {
         shogi.undrop(move.to.x, move.to.y);
       }
@@ -86,19 +103,16 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
       }
       alpha = Math.max(alpha, score);
       if (beta <= alpha) {
-        break; // Beta cutoff
+        break;
       }
     }
     return { score: maxEval, move: bestMove };
-  } else { // Minimizing player
+  } else {
     let minEval = Infinity;
     for (const move of legalMoves) {
         const capturedPiece = move.from ? shogi.get(move.to.x, move.to.y)?.kind : undefined;
-        let shouldPromote = false;
         if (move.from) {
-            const canPromote = (Shogi["getIllegalUnpromotedRow"](shogi.get(move.from.x, move.from.y).kind, shogi.turn, move.to.y) || Shogi["getIllegalUnpromotedRow"](shogi.get(move.from.x, move.from.y).kind, shogi.turn, move.from.y));
-            shouldPromote = canPromote && (move.to.y >= 7 || move.from.y >= 7);
-            shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, shouldPromote);
+            shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
         } else {
             shogi.drop(move.to.x, move.to.y, move.kind!);
         }
@@ -106,7 +120,7 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
         const { score } = minimax(shogi, depth - 1, alpha, beta, true);
 
         if (move.from) {
-            shogi.unmove(move.from.x, move.from.y, move.to.x, move.to.y, shouldPromote, capturedPiece);
+            shogi.unmove(move.from.x, move.from.y, move.to.x, move.to.y, move.promote, capturedPiece);
         } else {
             shogi.undrop(move.to.x, move.to.y);
         }
@@ -117,7 +131,7 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
         }
         beta = Math.min(beta, score);
         if (beta <= alpha) {
-            break; // Alpha cutoff
+            break;
         }
     }
     return { score: minEval, move: bestMove };

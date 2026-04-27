@@ -1,48 +1,44 @@
-import { Shogi, IMove, Color } from 'shogi.js';
+import { Shogi, IMove, Color, type Kind } from 'shogi.js';
 import type { AIResult } from '../../../shared/types';
 
 // --- Helper function to get all legal moves ---
 
 function getAllLegalMoves(shogi: Shogi): IMove[] {
-    const pseudoLegalMoves: IMove[] = [];
-    // Board moves
+    const pseudoLegal: IMove[] = [];
+
     for (let x = 1; x <= 9; x++) {
         for (let y = 1; y <= 9; y++) {
             const piece = shogi.get(x, y);
             if (piece && piece.color === shogi.turn) {
-                pseudoLegalMoves.push(...shogi.getMovesFrom(x, y));
+                pseudoLegal.push(...shogi.getMovesFrom(x, y));
             }
         }
     }
-    // Drop moves
-    pseudoLegalMoves.push(...shogi.getDropsBy(shogi.turn));
+    pseudoLegal.push(...shogi.getDropsBy(shogi.turn));
 
-    const legalMoves: IMove[] = [];
-    for (const move of pseudoLegalMoves) {
-        // Create a deep copy of the shogi object
-        const tempShogi = new Shogi({ preset: 'HIRATE' }); // Use HIRATE as the base
-        tempShogi.initializeFromSFENString(shogi.toSFENString());
+    return pseudoLegal.filter(move => {
+        let capturedKind: Kind | undefined = undefined;
 
-        try {
-            if (move.from) {
-                tempShogi.move(move.from.x, move.from.y, move.to.x, move.to.y);
-            } else {
-                if (!move.kind) {
-                    throw new Error("Drop move is missing 'kind' property from AI.");
-                }
-                tempShogi.drop(move.to.x, move.to.y, move.kind);
-            }
-
-            // After applying the move, check if the current player's king is in check
-            if (!tempShogi.isCheck(shogi.turn)) {
-                legalMoves.push(move);
-            }
-        } catch (e) {
-            // If the move itself is illegal (e.g., moving from an empty square),
-            // shogi.move or shogi.drop will throw an error. We just ignore such moves.
+        if (move.from) {
+            const captured = shogi.get(move.to.x, move.to.y);
+            capturedKind = captured?.kind;
+            shogi.move(move.from.x, move.from.y, move.to.x, move.to.y, move.promote);
+        } else {
+            shogi.drop(move.to.x, move.to.y, move.kind!);
         }
-    }
-    return legalMoves;
+
+        const currentTurn = shogi.turn;
+        const myColor = currentTurn === Color.Black ? Color.White : Color.Black;
+        const inCheck = shogi.isCheck(myColor);
+
+        if (move.from) {
+            shogi.unmove(move.from.x, move.from.y, move.to.x, move.to.y, move.promote, capturedKind);
+        } else {
+            shogi.undrop(move.to.x, move.to.y);
+        }
+
+        return !inCheck;
+    });
 }
 
 
