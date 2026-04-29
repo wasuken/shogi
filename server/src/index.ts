@@ -326,6 +326,17 @@ app.get('/api/battle-results/:id/evaluations', async (c) => {
     }
 });
 
+app.delete('/games/:id', (c) => {
+  const { id } = c.req.param();
+  if (games.has(id)) {
+    games.delete(id);
+    console.log(`Game ${id} deleted due to draw/timeout.`);
+    return c.json({ status: 'ok', message: 'Game deleted' });
+  } else {
+    return c.json({ error: 'Game not found' }, 404);
+  }
+});
+
 app.get('/', (c) => c.text('Shogi Server is running!'));
 
 // テスト時はserveしない

@@ -2,24 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.findBestMove = findBestMove;
 const shogi_js_1 = require("shogi.js");
-// --- Helper function to get all legal moves ---
-function getAllLegalMoves(shogi) {
-    const moves = [];
-    // Board moves
-    for (let x = 1; x <= 9; x++) {
-        for (let y = 1; y <= 9; y++) {
-            const piece = shogi.get(x, y);
-            if (piece && piece.color === shogi.turn) {
-                // Note: This gets pseudo-legal moves. It doesn't check for checks.
-                moves.push(...shogi.getMovesFrom(x, y));
-            }
-        }
-    }
-    // Drop moves
-    // Note: This gets pseudo-legal moves. It doesn't check for nifu (two pawns in a file).
-    moves.push(...shogi.getDropsBy(shogi.turn));
-    return moves;
-}
+const common_1 = require("./common");
 // --- AI Logic (Minimax with Alpha-Beta Pruning) ---
 function getPieceValue(kind) {
     // Simplified piece values
@@ -32,23 +15,44 @@ function getPieceValue(kind) {
         case 'KA': return 8;
         case 'HI': return 9;
         case 'OU': return 1000;
+        case 'TO': return 7; // 成歩（金と同じ）
+        case 'NY': return 6; // 成香
+        case 'NK': return 6; // 成桂
+        case 'NG': return 6; // 成銀
+        case 'UM': return 10; // 馬（角より強い）
+        case 'RY': return 12; // 龍（飛より強い）
         default: return 0;
     }
 }
 function evaluate(shogi) {
-    // Simple evaluation: count pieces in hand.
     let score = 0;
+    // 持ち駒
     for (const piece of shogi.hands[shogi_js_1.Color.Black]) {
         score += getPieceValue(piece.kind);
     }
     for (const piece of shogi.hands[shogi_js_1.Color.White]) {
         score -= getPieceValue(piece.kind);
     }
+    // 盤上の駒
+    for (let x = 1; x <= 9; x++) {
+        for (let y = 1; y <= 9; y++) {
+            const piece = shogi.get(x, y);
+            if (!piece)
+                continue;
+            const value = getPieceValue(piece.kind);
+            if (piece.color === shogi_js_1.Color.Black) {
+                score += value;
+            }
+            else {
+                score -= value;
+            }
+        }
+    }
     return score;
 }
 function minimax(shogi, depth, alpha, beta, maximizingPlayer) {
     var _a, _b;
-    const legalMoves = getAllLegalMoves(shogi);
+    const legalMoves = (0, common_1.getAllLegalMoves)(shogi);
     if (depth === 0 || legalMoves.length === 0) {
         return { score: evaluate(shogi), move: null };
     }
@@ -75,7 +79,7 @@ function minimax(shogi, depth, alpha, beta, maximizingPlayer) {
             }
             if (score > maxEval) {
                 maxEval = score;
-                bestMove = move;
+                bestMove = Object.assign(Object.assign({}, move), { promote: shouldPromote }); // ← promoteを付与
             }
             alpha = Math.max(alpha, score);
             if (beta <= alpha) {
@@ -124,10 +128,6 @@ function minimax(shogi, depth, alpha, beta, maximizingPlayer) {
 function findBestMove(shogi) {
     const depth = 2; // Search depth
     const isMaximizing = shogi.turn === shogi_js_1.Color.Black;
-    // Create a new Shogi instance to not modify the original
-    const shogiCopy = new shogi_js_1.Shogi();
-    shogiCopy.initializeFromSFENString(shogi.toSFENString());
-    shogiCopy.turn = shogi.turn;
-    const { move, score } = minimax(shogiCopy, depth, -Infinity, Infinity, isMaximizing);
+    const { move, score } = minimax(shogi, depth, -Infinity, Infinity, isMaximizing);
     return { move, score };
 }

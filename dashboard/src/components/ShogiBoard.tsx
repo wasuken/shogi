@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
 // Define types for Shogi pieces, squares, and moves
-type PieceType = 'FU' | 'KY' | 'KE' | 'GI' | 'KI' | 'KA' | 'HI' | 'OU' | 'RY' | 'UM' |
-                 '+FU' | '+KY' | '+KE' | '+GI' | '+KA' | '+HI'; // Promoted pieces
+type PieceType = 'FU' | 'KY' | 'KE' | 'GI' | 'KI' | 'KA' | 'HI' | 'OU' |
+                 'TO' | 'NY' | 'NK' | 'NG' | 'UM' | 'RY'; // Promoted pieces
 type Player = '+' | '-'; // Sente (first player) or Gote (second player)
 
 interface Piece {
@@ -55,14 +55,12 @@ const getKanjiPiece = (pieceType: PieceType): string => {
     case 'KA': return '角';
     case 'HI': return '飛';
     case 'OU': return '王';
-    case 'RY': return '龍'; // Promoted Rook
+    case 'TO': return 'と'; // Promoted Pawn
+    case 'NY': return '成香'; // Promoted Lance
+    case 'NK': return '成桂'; // Promoted Knight
+    case 'NG': return '成銀'; // Promoted Silver
     case 'UM': return '馬'; // Promoted Bishop
-    case '+FU': return 'と'; // Promoted Pawn
-    case '+KY': return '成香'; // Promoted Lance
-    case '+KE': return '成桂'; // Promoted Knight
-    case '+GI': return '成銀'; // Promoted Silver
-    case '+KA': return '馬'; // Promoted Bishop (same as UM)
-    case '+HI': return '龍'; // Promoted Rook (same as RY)
+    case 'RY': return '龍'; // Promoted Rook
     default: return '';
   }
 };
@@ -75,21 +73,21 @@ const getStandardInitialBoard = (): (Piece | null)[][] => {
   board[0][0] = getPieceFromCsa('-KY'); board[1][0] = getPieceFromCsa('-KE'); board[2][0] = getPieceFromCsa('-GI');
   board[3][0] = getPieceFromCsa('-KI'); board[4][0] = getPieceFromCsa('-OU'); board[5][0] = getPieceFromCsa('-KI');
   board[6][0] = getPieceFromCsa('-GI'); board[7][0] = getPieceFromCsa('-KE'); board[8][0] = getPieceFromCsa('-KY');
+  board[1][1] = getPieceFromCsa('-HI');
+  board[7][1] = getPieceFromCsa('-KA');
   for (let i = 0; i < 9; i++) {
-    board[i][1] = getPieceFromCsa('-FU');
+    board[i][2] = getPieceFromCsa('-FU');
   }
-  board[1][2] = getPieceFromCsa('-KA');
-  board[7][2] = getPieceFromCsa('-HI');
 
   // Sente (Player +) pieces
   board[0][8] = getPieceFromCsa('+KY'); board[1][8] = getPieceFromCsa('+KE'); board[2][8] = getPieceFromCsa('+GI');
   board[3][8] = getPieceFromCsa('+KI'); board[4][8] = getPieceFromCsa('+OU'); board[5][8] = getPieceFromCsa('+KI');
   board[6][8] = getPieceFromCsa('+GI'); board[7][8] = getPieceFromCsa('+KE'); board[8][8] = getPieceFromCsa('+KY');
+  board[1][7] = getPieceFromCsa('+KA');
+  board[7][7] = getPieceFromCsa('+HI');
   for (let i = 0; i < 9; i++) {
-    board[i][7] = getPieceFromCsa('+FU');
+    board[i][6] = getPieceFromCsa('+FU');
   }
-  board[1][6] = getPieceFromCsa('+HI');
-  board[7][6] = getPieceFromCsa('+KA');
 
   return board;
 };
@@ -120,7 +118,15 @@ const applyMove = (currentBoardState: BoardState, move: Move): BoardState => {
     const capturedPiece = newBoard[toCol][toRow];
     if (capturedPiece) {
       // Demote captured piece and add to hand
-      const demotedType = capturedPiece.type.replace('+', '') as PieceType;
+      const demoteMap: Partial<Record<PieceType, PieceType>> = {
+        'TO': 'FU',
+        'NY': 'KY',
+        'NK': 'KE',
+        'NG': 'GI',
+        'UM': 'KA',
+        'RY': 'HI',
+      };
+      const demotedType = demoteMap[capturedPiece.type] ?? capturedPiece.type;
       if (move.player === '+') {
         newSenteHand.push(demotedType);
       } else {

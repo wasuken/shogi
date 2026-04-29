@@ -8,7 +8,7 @@ C1 := minimax
 C2 := alphazero
 ROUNDS := 5
 # List of all node projects
-PROJECTS := server client/alphazero client/mcts client/minimax battle-runner
+PROJECTS := server client battle-runner
 
 # --- Help ---
 help:

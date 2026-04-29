@@ -1,0 +1,23 @@
+{
+  "name": "client",
+  "version": "1.0.0",
+  "description": "Shogi AI clients",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@types/node": "^20.12.12",
+    "shogi.js": "^5.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0"
+  }
+}

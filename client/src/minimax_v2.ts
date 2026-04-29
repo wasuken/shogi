@@ -1,28 +1,8 @@
 import { Shogi, IMove, Color, Kind, Piece } from 'shogi.js';
-import type { AIResult } from '../../../shared/types';
+import type { AIResult, AIMove } from './types';
+import { getAllLegalMoves } from './common';
 
-// --- Helper function to get all legal moves ---
-
-function getAllLegalMoves(shogi: Shogi): IMove[] {
-    const moves: IMove[] = [];
-    // Board moves
-    for (let x = 1; x <= 9; x++) {
-        for (let y = 1; y <= 9; y++) {
-            const piece = shogi.get(x, y);
-            if (piece && piece.color === shogi.turn) {
-                // Note: This gets pseudo-legal moves. It doesn't check for checks.
-                moves.push(...shogi.getMovesFrom(x, y));
-            }
-        }
-    }
-    // Drop moves
-    // Note: This gets pseudo-legal moves. It doesn't check for nifu (two pawns in a file).
-    moves.push(...shogi.getDropsBy(shogi.turn));
-    return moves;
-}
-
-
-// --- AI Logic (Minimax with Alpha-Beta Pruning) ---
+// --- AI Logic (Minimax with Enhanced Evaluation) ---
 
 function getPieceValue(kind: Kind): number {
     // Simplified piece values
@@ -35,29 +15,80 @@ function getPieceValue(kind: Kind): number {
         case 'KA': return 8;
         case 'HI': return 9;
         case 'OU': return 1000;
+        case 'TO': return 7;  // 成歩（金と同じ）
+        case 'NY': return 6;  // 成香
+        case 'NK': return 6;  // 成桂
+        case 'NG': return 6;  // 成銀
+        case 'UM': return 10; // 馬（角より強い）
+        case 'RY': return 12; // 龍（飛より強い）
         default: return 0;
     }
 }
 
 function evaluate(shogi: Shogi): number {
-  // Simple evaluation: count pieces in hand.
   let score = 0;
+
+  // 持ち駒
   for (const piece of shogi.hands[Color.Black]) {
     score += getPieceValue(piece.kind);
   }
   for (const piece of shogi.hands[Color.White]) {
     score -= getPieceValue(piece.kind);
   }
+
+  // 盤上の駒
+  for (let x = 1; x <= 9; x++) {
+    for (let y = 1; y <= 9; y++) {
+      const piece = shogi.get(x, y);
+      if (!piece) continue;
+      let value = getPieceValue(piece.kind);
+
+      // 成り駒ボーナス
+      const promotedPieces: Kind[] = ['TO', 'NY', 'NK', 'NG', 'UM', 'RY'];
+      if (promotedPieces.includes(piece.kind)) {
+        value += 2;
+      }
+
+      // 駒の位置ボーナス
+      // 飛車・角は中央（4〜6列、4〜6段）にいると +2
+      if ((piece.kind === 'HI' || piece.kind === 'KA') &&
+          x >= 4 && x <= 6 && y >= 4 && y <= 6) {
+        value += 2;
+      }
+
+      // 歩は前進するほど +0.1
+      if (piece.kind === 'FU') {
+        if (piece.color === Color.Black) {
+          // 先手の歩は y が小さいほど前進している（1が敵陣、9が自陣）
+          value += (10 - y) * 0.1;
+        } else {
+          // 後手の歩は y が大きいほど前進している
+          value += (y - 1) * 0.1;
+        }
+      }
+
+      if (piece.color === Color.Black) {
+        score += value;
+      } else {
+        score -= value;
+      }
+    }
+  }
+
+  // 王手ボーナス
+  if (shogi.isCheck(Color.White)) score += 50;  // 後手玉に王手
+  if (shogi.isCheck(Color.Black)) score -= 50;  // 先手玉に王手
+
   return score;
 }
 
-function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maximizingPlayer: boolean): { score: number, move: IMove | null } {
+function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maximizingPlayer: boolean): { score: number, move: AIMove | null } {
   const legalMoves = getAllLegalMoves(shogi);
   if (depth === 0 || legalMoves.length === 0) {
     return { score: evaluate(shogi), move: null };
   }
 
-  let bestMove: IMove | null = legalMoves[0] || null;
+  let bestMove: AIMove | null = legalMoves[0] || null;
 
   if (maximizingPlayer) {
     let maxEval = -Infinity;
@@ -82,7 +113,7 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
 
       if (score > maxEval) {
         maxEval = score;
-        bestMove = move;
+        bestMove = { ...move, promote: shouldPromote };
       }
       alpha = Math.max(alpha, score);
       if (beta <= alpha) {
@@ -125,19 +156,14 @@ function minimax(shogi: Shogi, depth: number, alpha: number, beta: number, maxim
 }
 
 /**
- * AI a-la Minimax.
+ * AI a-la Minimax with Enhanced Evaluation.
  * @param shogi The current game state.
  * @returns The best move found, or null if no moves are available.
  */
 export function findBestMove(shogi: Shogi): AIResult {
     const depth = 2; // Search depth
     const isMaximizing = shogi.turn === Color.Black;
-    // Create a new Shogi instance to not modify the original
-    const shogiCopy = new Shogi();
-    shogiCopy.initializeFromSFENString(shogi.toSFENString());
-    shogiCopy.turn = shogi.turn;
 
-
-    const { move, score } = minimax(shogiCopy, depth, -Infinity, Infinity, isMaximizing);
+    const { move, score } = minimax(shogi, depth, -Infinity, Infinity, isMaximizing);
     return { move, score };
 }
